@@ -9,8 +9,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc && node dist/cli.js",
-    "clean": "rm -rf dist dist-test",
-    "test": "tsc -p tsconfig.test.json && node --test dist-test/tests/*.test.js"
+    "clean": "rm -rf dist dist-test"
   },
   "engines": {
     "node": ">=20"

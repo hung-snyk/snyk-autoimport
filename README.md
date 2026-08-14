@@ -250,7 +250,7 @@ command is safe to run on a schedule to pick up newly created repositories.
 - **Imports are polled inline** with no overall timeout. There is no command to
   check the status of a previously started import.
 - **Only GitHub sources are verified end to end.** Other providers are
-  implemented and validated by automated tests but have not been exercised
+  implemented and covered by the maintainers' tests but have not been exercised
   against live instances.
 - **Not distributed through npm** or as a standalone binary.
 
@@ -258,19 +258,12 @@ command is safe to run on a schedule to pick up newly created repositories.
 
 ```bash
 npm run build   # compile TypeScript to dist/
-npm test        # compile with tests, then run the test suite
 npm run clean   # remove build output
 ```
 
-Application code lives in `src/` and tests in `tests/`. `npm run build` compiles
-only `src/`, so the installed command never carries test code; `npm test` uses
-`tsconfig.test.json`, which compiles both to `dist-test/`.
-
-The test suite covers organization resolution, organization ID validation,
-source configuration integrity, failure classification, and result aggregation.
-Modules that perform file or network input/output are validated through live
-runs rather than mocks, so the suite requires no credentials and makes no
-network calls.
+All application code lives in `src/`. The maintainers' test suite is kept
+outside this repository, so `npm run build` is the only step needed to produce a
+working command.
 
 ## License
 

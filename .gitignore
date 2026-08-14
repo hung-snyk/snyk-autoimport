@@ -7,3 +7,6 @@ dist-test/
 
 # Internal design/decision log — not for distribution.
 NOTES.md
+
+# Test suite — kept local, not part of the distributed repository.
+tests/
