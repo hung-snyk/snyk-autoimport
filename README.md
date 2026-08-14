@@ -52,7 +52,7 @@ locally. You do **not** need to install `snyk-api-import` separately — it is a
 normal dependency and `npm install` fetches it automatically.
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/hung-snyk/snyk-autoimport.git
 cd snyk-autoimport
 npm install
 npm run build
