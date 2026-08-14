@@ -258,14 +258,19 @@ command is safe to run on a schedule to pick up newly created repositories.
 
 ```bash
 npm run build   # compile TypeScript to dist/
-npm test        # build, then run the test suite
-npm run clean   # remove dist/
+npm test        # compile with tests, then run the test suite
+npm run clean   # remove build output
 ```
 
-The test suite covers organization resolution, source configuration integrity,
-failure classification, and result aggregation. Modules that perform file or
-network input/output are validated through live runs rather than mocks, so the
-suite requires no credentials and makes no network calls.
+Application code lives in `src/` and tests in `tests/`. `npm run build` compiles
+only `src/`, so the installed command never carries test code; `npm test` uses
+`tsconfig.test.json`, which compiles both to `dist-test/`.
+
+The test suite covers organization resolution, organization ID validation,
+source configuration integrity, failure classification, and result aggregation.
+Modules that perform file or network input/output are validated through live
+runs rather than mocks, so the suite requires no credentials and makes no
+network calls.
 
 ## License
 

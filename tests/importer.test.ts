@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeOutcomes, type ImportOutcome } from './importer';
+import { mergeOutcomes, type ImportOutcome } from '../src/importer';
 
 function outcome(partial: Partial<ImportOutcome>): ImportOutcome {
   return {

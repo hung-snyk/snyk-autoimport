@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { requestsManager } from 'snyk-request-manager';
-import { resolveOrg, formatOrgMatch, type OrgSummary } from './snyk';
+import { resolveOrg, formatOrgMatch, type OrgSummary } from '../src/snyk';
 
 /** Stub a requestsManager whose /orgs call returns a fixed org list. */
 function stubRequestManager(orgs: Array<Partial<OrgSummary> & { id: string; name: string }>): requestsManager {

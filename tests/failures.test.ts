@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isAuthFailure, isNotFoundFailure, type FailureEntry } from './failures';
+import { isAuthFailure, isNotFoundFailure, type FailureEntry } from '../src/failures';
 
 test('isAuthFailure: matches the actual 401 shape seen in live testing', () => {
   const entry: FailureEntry = {
