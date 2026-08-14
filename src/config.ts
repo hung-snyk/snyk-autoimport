@@ -9,8 +9,7 @@
 import envPaths from 'env-paths';
 import * as fs from 'fs';
 import * as path from 'path';
-
-export type Region = 'global' | 'eu' | 'au';
+import type { Region } from './regions';
 
 /**
  * Bitbucket Cloud is deliberately excluded here — its 3-method auth (API
@@ -29,7 +28,11 @@ export interface Credentials {
 export interface StoredConfig {
   credentials?: Credentials;
   defaults?: {
-    region?: Region;
+    /**
+     * Held as a plain string, not a Region: a file written by an older version
+     * can contain a name that is no longer valid, so readers validate it.
+     */
+    region?: string;
   };
 }
 

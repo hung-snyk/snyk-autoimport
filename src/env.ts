@@ -15,13 +15,30 @@
  * through this store. See config.ts's Credentials type for why.
  */
 import * as fs from 'fs';
-import { loadConfig, LOG_DIR, type Region } from './config';
+import { loadConfig, LOG_DIR } from './config';
+import {
+  DEFAULT_REGION,
+  REGION_API_HOSTS,
+  REGIONS,
+  isRegion,
+  type Region,
+} from './regions';
 
-const REGION_HOSTS: Record<Region, string> = {
-  global: 'https://api.snyk.io/v1',
-  eu: 'https://api.eu.snyk.io/v1',
-  au: 'https://api.au.snyk.io/v1',
-};
+/**
+ * Resolve the stored region, refusing to guess. Region names changed to match
+ * the Snyk docs, so a config written by an older version may hold a retired
+ * name — falling back to the default there would silently send an EU or AU
+ * customer's requests to the US host, so this fails with migration steps.
+ */
+function storedRegion(value: string | undefined): Region {
+  if (!value) return DEFAULT_REGION;
+  if (isRegion(value)) return value;
+  throw new Error(
+    `Stored region "${value}" is no longer a valid name. Region names now match ` +
+      `the Snyk docs: ${REGIONS.join(', ')}. ` +
+      'Run `snyk-autoimport auth login` to set it again, or pass --region.',
+  );
+}
 
 function setIfAbsent(key: string, value: string | undefined): void {
   if (value && !process.env[key]) {
@@ -45,14 +62,14 @@ export interface PreparedEnv {
 export function prepareEnv(region?: Region): PreparedEnv {
   const config = loadConfig();
   const creds = config.credentials ?? {};
-  const effectiveRegion = region ?? config.defaults?.region ?? 'global';
+  const effectiveRegion = region ?? storedRegion(config.defaults?.region);
 
   setIfAbsent('SNYK_TOKEN', creds.snykToken);
   setIfAbsent('GITHUB_TOKEN', creds.githubToken);
   setIfAbsent('GITLAB_TOKEN', creds.gitlabToken);
   setIfAbsent('AZURE_TOKEN', creds.azureToken);
   setIfAbsent('BITBUCKET_SERVER_TOKEN', creds.bitbucketServerToken);
-  setIfAbsent('SNYK_API', REGION_HOSTS[effectiveRegion]);
+  setIfAbsent('SNYK_API', REGION_API_HOSTS[effectiveRegion]);
 
   // getLoggingPath() throws if SNYK_LOG_PATH is unset; the library writes
   // per-target logs there. We read results from return values, not the logs,

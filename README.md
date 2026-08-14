@@ -28,6 +28,7 @@ hand-authored JSON files and log-file inspection the underlying tool requires.
 - [Quick start](#quick-start)
 - [Commands](#commands)
 - [Supported sources](#supported-sources)
+- [Regions](#regions)
 - [Credentials and configuration](#credentials-and-configuration)
 - [Continuous integration](#continuous-integration)
 - [How it works](#how-it-works)
@@ -129,7 +130,7 @@ node dist/cli.js integrations --snyk-org "Acme Corp"
 |---|---|
 | `--snyk-org` | Snyk organization name or slug. |
 | `--snyk-org-id` | Snyk organization UUID. |
-| `--region` | `global` (default), `eu`, or `au`. |
+| `--region` | Snyk region — see [Regions](#regions). Defaults to `snyk-us-01`. |
 
 ### `import`
 
@@ -143,7 +144,7 @@ already imported, submits the remainder, and prints a summary.
 | `--source` | **Required.** SCM source type — see [Supported sources](#supported-sources). Never inferred, because one organization may have several integrations of the same family configured. |
 | `--source-org` | The organization, group, project, or workspace to import from. `--github-org` is accepted as an alias. |
 | `--source-url` | Host URL for self-hosted providers. Required for `github-enterprise` and `bitbucket-server`; optional override for other providers. |
-| `--region` | `global` (default), `eu`, or `au`. Overrides the stored region. |
+| `--region` | Snyk region — see [Regions](#regions). Overrides the stored region. |
 | `--dry-run` | Show the repositories that would be imported and exit without making changes. |
 | `--yes` | Skip the confirmation prompt. Required for non-interactive use. |
 
@@ -192,6 +193,42 @@ through environment variables rather than `auth login`:
 Methods are resolved in the order listed above. Set
 `BITBUCKET_CLOUD_AUTH_METHOD` to `user`, `api`, or `oauth` to force a specific
 method when more than one is configured.
+
+## Regions
+
+If your Snyk account is not hosted on the default US instance, select the
+matching region so requests reach the right API. Region names and hosts are
+identical to the aliases accepted by `snyk config environment`, so a value that
+works with the Snyk CLI works here too.
+
+| `--region` | Snyk environment | API host |
+|---|---|---|
+| `snyk-us-01` (default) | SNYK-US-01 (US) | `https://api.snyk.io` |
+| `snyk-us-02` | SNYK-US-02 (US) | `https://api.us.snyk.io` |
+| `snyk-eu-01` | SNYK-EU-01 (Frankfurt) | `https://api.eu.snyk.io` |
+| `snyk-au-01` | SNYK-AU-01 (Australia) | `https://api.au.snyk.io` |
+
+Names are case-insensitive, so the uppercase spelling used in the Snyk
+documentation can be pasted in directly:
+
+```bash
+node dist/cli.js import --region SNYK-EU-01 ...
+```
+
+Set the region once through `auth login` to store it, or pass `--region` per
+command to override the stored value. `SNYK_API` set in the environment takes
+precedence over both.
+
+New Enterprise and Pilot accounts provisioned in the US through automated
+provisioning are hosted on **SNYK-US-02**, not `snyk-us-01`. If you are unsure
+which instance you are on, check the host in your Snyk web UI URL.
+
+SNYK-GOV-01 (Snyk for Government) is not supported: it does not accept API
+keys, and this tool authenticates with a `SNYK_TOKEN` API key.
+
+See
+[Regional hosting and data residency](https://docs.snyk.io/snyk-data-and-governance/regional-hosting-and-data-residency)
+for the full list of regional URLs.
 
 ## Credentials and configuration
 

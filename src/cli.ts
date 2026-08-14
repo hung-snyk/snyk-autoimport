@@ -24,9 +24,15 @@ import {
   clearCredentials,
   loadConfig,
   setRegion,
-  type Region,
   type Credentials,
 } from './config';
+import {
+  DEFAULT_REGION,
+  REGIONS,
+  isRegion,
+  parseRegion,
+  type Region,
+} from './regions';
 import { prepareEnv } from './env';
 import {
   makeRequestManager,
@@ -62,10 +68,10 @@ async function authLogin(): Promise<void> {
   const gitlabToken = await askSecret('GitLab token (optional, for gitlab): ');
   const azureToken = await askSecret('Azure DevOps token (optional, for azure-repos): ');
   const bitbucketServerToken = await askSecret('Bitbucket Server token (optional, for bitbucket-server): ');
-  const currentRegion = loadConfig().defaults?.region ?? 'global';
-  const regionInput = (await ask(`Region — global/eu/au [current: ${currentRegion}]: `))
-    .trim()
-    .toLowerCase();
+  const currentRegion = loadConfig().defaults?.region ?? DEFAULT_REGION;
+  const regionInput = (
+    await ask(`Region — ${REGIONS.join(' / ')} [current: ${currentRegion}]: `)
+  ).trim();
 
   const creds: Credentials = {};
   if (snykToken) creds.snykToken = snykToken;
@@ -76,10 +82,7 @@ async function authLogin(): Promise<void> {
 
   let regionChanged = false;
   if (regionInput) {
-    if (regionInput !== 'global' && regionInput !== 'eu' && regionInput !== 'au') {
-      throw new Error(`Invalid region "${regionInput}". Must be global, eu, or au.`);
-    }
-    setRegion(regionInput as Region);
+    setRegion(parseRegion(regionInput));
     regionChanged = true;
   }
 
@@ -105,7 +108,15 @@ function authStatus(): void {
   console.log('  Azure DevOps token:      ' + (creds.azureToken ? 'set' : 'not set'));
   console.log('  Bitbucket Server token:  ' + (creds.bitbucketServerToken ? 'set' : 'not set'));
   console.log('  Bitbucket Cloud auth:    env vars only, not shown here (see README)');
-  console.log('  Region:                  ' + (config.defaults?.region ?? 'global'));
+  // Reports rather than throws on a retired name — status should still be
+  // readable when the stored region is what needs fixing.
+  const stored = config.defaults?.region;
+  const region = !stored
+    ? `${DEFAULT_REGION} (default)`
+    : isRegion(stored)
+      ? stored
+      : `${stored} (no longer valid — re-run \`auth login\`)`;
+  console.log('  Region:                  ' + region);
 }
 
 /**
@@ -370,6 +381,13 @@ async function integrationsCmd(args: {
   }
 }
 
+const REGION_DESCRIBE = `Snyk region: ${REGIONS.join(' | ')} (default ${DEFAULT_REGION})`;
+
+/** Validate --region eagerly so a typo fails before any API call. */
+function optionalRegion(value: string | undefined): Region | undefined {
+  return value === undefined ? undefined : parseRegion(value);
+}
+
 async function main(): Promise<void> {
   // yargs 16 has no parseAsync; capture the handler's promise and await it
   // after parse() so errors propagate to the top-level catch.
@@ -403,13 +421,14 @@ async function main(): Promise<void> {
         y
           .option('snyk-org', { type: 'string', describe: 'Snyk org name or slug' })
           .option('snyk-org-id', { type: 'string', describe: 'Snyk org UUID' })
-          .option('region', { choices: ['global', 'eu', 'au'] as const, describe: 'Snyk region' }),
+          .option('region', { type: 'string', describe: REGION_DESCRIBE }),
       (a) => {
-        pending = integrationsCmd({
-          snykOrg: a['snyk-org'] as string | undefined,
-          snykOrgId: a['snyk-org-id'] as string | undefined,
-          region: a.region as Region | undefined,
-        });
+        pending = (async () =>
+          integrationsCmd({
+            snykOrg: a['snyk-org'] as string | undefined,
+            snykOrgId: a['snyk-org-id'] as string | undefined,
+            region: optionalRegion(a.region as string | undefined),
+          }))();
       },
     )
     .command(
@@ -432,21 +451,22 @@ async function main(): Promise<void> {
             alias: 'github-org',
             describe: 'Org/group/project/workspace to import from, within --source',
           })
-          .option('region', { choices: ['global', 'eu', 'au'] as const, describe: 'Snyk region' })
+          .option('region', { type: 'string', describe: REGION_DESCRIBE })
           .option('source-url', { type: 'string', describe: 'Self-hosted host URL (required for github-enterprise and bitbucket-server)' })
           .option('yes', { type: 'boolean', default: false, describe: 'Skip confirmation (for CI)' })
           .option('dry-run', { type: 'boolean', default: false, describe: 'Show the plan; create nothing' }),
       (a) => {
-        pending = importCmd({
-          source: a.source as string | undefined,
-          snykOrg: a['snyk-org'] as string | undefined,
-          snykOrgId: a['snyk-org-id'] as string | undefined,
-          sourceOrg: a['source-org'] as string | undefined,
-          region: a.region as Region | undefined,
-          sourceUrl: a['source-url'] as string | undefined,
-          yes: a.yes as boolean,
-          dryRun: a['dry-run'] as boolean,
-        });
+        pending = (async () =>
+          importCmd({
+            source: a.source as string | undefined,
+            snykOrg: a['snyk-org'] as string | undefined,
+            snykOrgId: a['snyk-org-id'] as string | undefined,
+            sourceOrg: a['source-org'] as string | undefined,
+            region: optionalRegion(a.region as string | undefined),
+            sourceUrl: a['source-url'] as string | undefined,
+            yes: a.yes as boolean,
+            dryRun: a['dry-run'] as boolean,
+          }))();
       },
     )
     .demandCommand(1, 'Specify a command: auth or import')
