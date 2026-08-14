@@ -2,6 +2,7 @@ node_modules/
 dist/
 *.log
 .DS_Store
+.vscode/
 
 # Internal design/decision log — not for distribution.
 NOTES.md
