@@ -1,0 +1,31 @@
+{
+  "name": "snyk-autoimport",
+  "version": "0.1.0",
+  "description": "One-command bulk repo import into Snyk. A friendly wrapper around snyk-api-import.",
+  "bin": {
+    "snyk-autoimport": "dist/cli.js"
+  },
+  "main": "dist/cli.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc && node dist/cli.js",
+    "clean": "rm -rf dist",
+    "test": "tsc && node --test dist/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "env-paths": "2.2.1",
+    "snyk-api-import": "2.23.2",
+    "snyk-request-manager": "1.9.3",
+    "yargs": "16.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/yargs": "16.0.4",
+    "typescript": "^5.3.0"
+  },
+  "private": true,
+  "license": "Apache-2.0"
+}
