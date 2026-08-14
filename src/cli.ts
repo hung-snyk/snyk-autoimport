@@ -36,6 +36,7 @@ import {
   formatOrgMatch,
   type OrgSummary,
 } from './snyk';
+import { assertValidOrgId } from './org-id';
 import { discoverGithubTargets } from './discover';
 import { discoverGitlabTargets } from './discover-gitlab';
 import { discoverAzureTargets } from './discover-azure';
@@ -119,6 +120,7 @@ async function resolveTargetOrg(args: {
   yes: boolean;
 }): Promise<OrgSummary> {
   if (args.snykOrgId) {
+    assertValidOrgId(args.snykOrgId, '--snyk-org-id');
     return { id: args.snykOrgId, name: args.snykOrgId };
   }
   if (!args.snykOrg) {

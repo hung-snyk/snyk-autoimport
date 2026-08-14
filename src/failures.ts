@@ -10,6 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { LOG_DIR } from './config';
+import { ORG_ID_PATTERN } from './org-id';
 import type { TargetLike } from './target-format';
 
 const FAILED_LOG_NAME = 'failed-imports.log';
@@ -20,8 +21,22 @@ export interface FailureEntry {
   innerError?: string;
 }
 
+/**
+ * orgId reaches the filesystem here and originates from the Snyk API (or from
+ * `--snyk-org-id`), so it is treated as untrusted: anything that is not a bare
+ * UUID is rejected outright rather than sanitized, since stripping separators
+ * out of a bad value would quietly read a *different* file. basename() then
+ * pins the result to a single path segment inside LOG_DIR — a no-op for a
+ * validated UUID, and a backstop if that pattern is ever loosened.
+ *
+ * Both readers below treat a throw as "no failure details available", so a bad
+ * value degrades to a generic summary instead of escaping LOG_DIR.
+ */
 function logPathFor(orgId: string): string {
-  return path.join(LOG_DIR, `${orgId}.${FAILED_LOG_NAME}`);
+  if (!ORG_ID_PATTERN.test(orgId)) {
+    throw new Error(`Refusing to build a log path from non-UUID org id "${orgId}".`);
+  }
+  return path.join(LOG_DIR, path.basename(`${orgId}.${FAILED_LOG_NAME}`));
 }
 
 /** Byte offset to read from after the next import (current end of file). */
