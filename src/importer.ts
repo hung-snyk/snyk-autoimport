@@ -2,59 +2,52 @@
  * Run the import: kick off targets, then poll to completion.
  *
  * `importTargets` paces requests internally (CONCURRENT_IMPORTS, default 15)
- * and logs+skips individual kickoff failures rather than aborting the batch.
- * `pollImportUrls` waits for each job and returns the per-project results.
- * We snapshot the failed-imports log around the run to surface real reasons.
+ * and returns per-target kickoff failures rather than aborting the batch.
+ * `pollImportUrls` then waits for each job and returns the project results.
  */
 import type { requestsManager } from 'snyk-request-manager';
 import { importTargets, pollImportUrls, type ImportTarget } from './api';
-import {
-  snapshotOffset,
-  readFailuresSince,
-  type FailureEntry,
-} from './failures';
-import { withQuietConsole } from './quiet';
+import type { FailureEntry } from './failures';
 
 export interface ImportOutcome {
   createdProjects: Array<{ projectUrl: string; targetFile?: string }>;
   failedProjects: Array<{ projectUrl?: string; targetFile?: string; locationUrl?: string }>;
   /** Targets that never produced a polling URL (kickoff itself failed). */
   kickoffFailures: number;
-  /** Parsed reasons for the kickoff failures, read from the library's log. */
+  /** Why each of those kickoffs failed. */
   kickoffFailureDetails: FailureEntry[];
   submittedTargets: number;
 }
 
 export async function runImport(
   rm: requestsManager,
-  orgId: string,
   targets: ImportTarget[],
 ): Promise<ImportOutcome> {
-  const offset = snapshotOffset(orgId);
-
-  const { pollingUrls, projects, failed } = await withQuietConsole(async () => {
-    const urls = await importTargets(rm, targets);
-    const res = await pollImportUrls(rm, urls);
-    return { pollingUrls: urls, projects: res.projects, failed: res.failed };
-  });
-
-  const created = projects.filter((p) => p.success);
-  const kickoffFailures = Math.max(0, targets.length - pollingUrls.length);
-  const kickoffFailureDetails =
-    kickoffFailures > 0 ? readFailuresSince(orgId, offset) : [];
+  const { pollingUrls, failures } = await importTargets(rm, targets);
+  const { projects, failed, pollFailures } = await pollImportUrls(rm, pollingUrls);
 
   return {
-    createdProjects: created.map((p) => ({
+    createdProjects: projects.map((p) => ({
       projectUrl: p.projectUrl,
       targetFile: p.targetFile,
     })),
-    failedProjects: failed.map((f) => ({
-      projectUrl: f.projectUrl,
-      targetFile: f.targetFile,
-      locationUrl: (f as { locationUrl?: string }).locationUrl,
+    failedProjects: [
+      ...failed.map((f) => ({
+        projectUrl: f.projectUrl,
+        targetFile: f.targetFile,
+        locationUrl: f.locationUrl,
+      })),
+      // A job whose status could never be read is reported here rather than
+      // dropped: its projects may well have been created, so claiming success
+      // would be wrong and claiming nothing would hide it.
+      ...pollFailures.map((f) => ({ locationUrl: f.locationUrl })),
+    ],
+    kickoffFailures: failures.length,
+    kickoffFailureDetails: failures.map((f) => ({
+      target: f.target,
+      errorMessage: f.errorMessage,
+      status: f.status,
     })),
-    kickoffFailures,
-    kickoffFailureDetails,
     submittedTargets: targets.length,
   };
 }

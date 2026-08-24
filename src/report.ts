@@ -66,14 +66,5 @@ function describeFailure(d: FailureEntry, isCloudApp: boolean): string {
   if (isCloudApp && isNotFoundFailure(d)) {
     return `${repo}: not accessible to the Snyk GitHub App (grant it access, then re-run)`;
   }
-  const reason = firstLine(d.innerError) || d.errorMessage || 'unknown error';
-  return `${repo}: ${reason}`;
-}
-
-/** Pull the human-meaningful message out of an innerError blob. */
-function firstLine(innerError?: string): string | undefined {
-  if (!innerError) return undefined;
-  const m = innerError.match(/message:\s*(.+)/);
-  if (m) return m[1].trim().replace(/^AxiosError:\s*/, '');
-  return innerError.split('\n')[0].trim();
+  return `${repo}: ${d.errorMessage || 'unknown error'}`;
 }

@@ -396,13 +396,12 @@ async function importCmd(args: ImportArgs): Promise<void> {
 
   console.log('\nImporting...');
 
-  // Canary: submit the first target alone before the rest. snyk-api-import
-  // kills its own process (process.exit(1), no summary) after ~30 kickoff
-  // failures in a row — a scenario that's almost always systemic (wrong
-  // token/integration), which a single early failure already reveals. This
-  // converts "might die unexplained mid-batch" into "fails fast and clearly."
+  // Canary: submit the first target alone before the rest. A failure on the
+  // very first repo is almost always systemic (wrong token or integration) and
+  // would repeat for every remaining repo, so stopping here turns a long run of
+  // identical failures into one clear message.
   const [canaryTarget, ...restTargets] = toImport;
-  const canaryOutcome = await runImport(rm, org.id, [canaryTarget]);
+  const canaryOutcome = await runImport(rm, [canaryTarget]);
 
   if (canaryOutcome.kickoffFailures > 0) {
     printSummary(canaryOutcome, { source: args.source });
@@ -417,7 +416,7 @@ async function importCmd(args: ImportArgs): Promise<void> {
 
   let outcome = canaryOutcome;
   if (restTargets.length > 0) {
-    const restOutcome = await runImport(rm, org.id, restTargets);
+    const restOutcome = await runImport(rm, restTargets);
     outcome = mergeOutcomes(canaryOutcome, restOutcome);
   }
   printSummary(outcome, { source: args.source });
