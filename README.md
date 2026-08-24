@@ -184,7 +184,7 @@ already imported, submits the remainder, and prints a summary.
 | `github` | `GITHUB_TOKEN` | Not required | Verified end to end (classic integration requires a personal Snyk token) |
 | `github-enterprise` | `GITHUB_TOKEN` | **Required** | Implemented, not yet verified live |
 | `gitlab` | `GITLAB_TOKEN` | Optional (defaults to gitlab.com) | Implemented, not yet verified live |
-| `azure-repos` | `AZURE_TOKEN` | Optional (defaults to dev.azure.com) | Implemented, not yet verified live |
+| `azure-repos` | `AZURE_TOKEN` | Optional (defaults to dev.azure.com) | Discovery and deduplication verified live; import not yet verified |
 | `bitbucket-server` | `BITBUCKET_SERVER_TOKEN` | **Required** | Implemented, not yet verified live |
 | `bitbucket-cloud` | See [below](#bitbucket-cloud-authentication) | Not required | Implemented, not yet verified live |
 
