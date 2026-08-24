@@ -15,7 +15,7 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
 // Silence Node deprecation warnings (e.g. url.parse) emitted from deep inside
-// snyk-api-import's poller — not actionable for our users.
+// the still-borrowed snyk-api-import dedup helper — not actionable for our users.
 (process as { noDeprecation?: boolean }).noDeprecation = true;
 
 import {

@@ -15,8 +15,8 @@ export type Region = 'snyk-us-01' | 'snyk-us-02' | 'snyk-eu-01' | 'snyk-au-01';
 export const DEFAULT_REGION: Region = 'snyk-us-01';
 
 /**
- * v1 API base per region — `snyk-api-import` reads this as SNYK_API. The `/v1`
- * suffix is ours; the docs list the bare host.
+ * v1 API base per region, published as SNYK_API for `snyk-request-manager` to
+ * read. The `/v1` suffix is ours; the docs list the bare host.
  */
 export const REGION_API_HOSTS: Record<Region, string> = {
   'snyk-us-01': 'https://api.snyk.io/v1',

@@ -1,11 +1,13 @@
 /**
  * Bridge stored config -> process.env.
  *
- * The underlying `snyk-api-import` library reads everything from env vars
- * (`SNYK_TOKEN`, `SNYK_LOG_PATH`, `SNYK_API`, `GITHUB_TOKEN`, `GITLAB_TOKEN`,
- * `AZURE_TOKEN`, `BITBUCKET_SERVER_TOKEN`, `CONCURRENT_IMPORTS`). The whole
- * point of this wrapper is that the user never sets those by hand — we
- * populate them here from the credential store.
+ * Everything downstream reads its configuration from env vars: SCM discovery
+ * takes `GITHUB_TOKEN` / `GITLAB_TOKEN` / `AZURE_TOKEN` /
+ * `BITBUCKET_SERVER_TOKEN`, `snyk-request-manager` takes `SNYK_TOKEN` and
+ * `SNYK_API`, the import paces itself with `CONCURRENT_IMPORTS`, and the
+ * still-borrowed dedup helper requires `SNYK_LOG_PATH`. The whole point of
+ * this tool is that the user never sets those by hand — we populate them here
+ * from the credential store.
  *
  * Precedence: a value already present in the real environment always wins,
  * so CI pipelines can inject secrets the normal way and ignore the store.
@@ -74,9 +76,10 @@ export function prepareEnv(region?: Region): PreparedEnv {
   }
   setIfAbsent('SNYK_API', REGION_API_HOSTS[effectiveRegion]);
 
-  // getLoggingPath() throws if SNYK_LOG_PATH is unset; the library writes
-  // per-target logs there. We read results from return values, not the logs,
-  // so this is just scratch space.
+  // The borrowed dedup helper's getLoggingPath() throws if SNYK_LOG_PATH is
+  // unset, and it writes there. Nothing reads those logs back — results come
+  // from return values now — so this is just scratch space, and it can go once
+  // dedup is ours too.
   if (!process.env.SNYK_LOG_PATH) {
     fs.mkdirSync(LOG_DIR, { recursive: true });
     process.env.SNYK_LOG_PATH = LOG_DIR;

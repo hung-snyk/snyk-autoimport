@@ -1,14 +1,13 @@
 /**
- * Azure Repos discovery via snyk-api-import's `listAzureRepos`, which
- * internally enumerates every Azure DevOps project within the org and
- * flattens their repos into one list. Target shape is `{owner, name,
- * branch}` — identical to the GitHub family, and matches Snyk's own
- * `projectToTarget` dedup generator for the azure-repos origin.
+ * Azure Repos discovery. `listAzureRepos` enumerates every Azure DevOps
+ * project within the org and flattens their repos into one list. Target shape
+ * is `{owner, name, branch}` — identical to the GitHub family, and matches
+ * Snyk's own `projectToTarget` dedup generator for the azure-repos origin.
  *
- * The branch is always the repo's default branch: the library reads it from
- * Azure's `defaultBranch` and there is no per-repo override, so nothing here
- * chooses a branch. Repos with no default branch (empty repos) and disabled
- * repos are dropped by the library before we see them.
+ * The branch is always the repo's default branch, read from Azure's
+ * `defaultBranch`; there is no per-repo override, so nothing here chooses a
+ * branch. Repos with no default branch (empty repos) and disabled repos are
+ * dropped during discovery before we see them.
  */
 import { listAzureRepos, type ImportTarget } from './api';
 

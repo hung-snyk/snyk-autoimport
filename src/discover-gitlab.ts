@@ -1,14 +1,13 @@
 /**
- * GitLab repo discovery via snyk-api-import's `listGitlabRepos`.
+ * GitLab repo discovery.
  *
- * The `name` field matters beyond display: `listGitlabRepos` returns
+ * The `name` field matters beyond display: discovery returns
  * `path_with_namespace` (e.g. "group/repo") as `name`, which is exactly the
  * format Snyk's own dedup (`gitlabProjectToImportLogTarget`) derives from
  * existing project names. GitLab import targets are `{id, branch}` on the
- * wire (numeric project id — `snyk-api-import` detects a GitLab target by
- * the presence of both `id` and `branch` keys), but dedup never uses `id`
- * (Snyk's project API never returns it) — so `name` must be carried too,
- * even though the wire call itself drops it.
+ * wire (a numeric project id, detected by its presence in the target), but
+ * dedup never uses `id` — Snyk's project API never returns it — so `name`
+ * must be carried too, even though the wire call itself drops it.
  */
 import { listGitlabRepos, type ImportTarget } from './api';
 

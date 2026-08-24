@@ -2,18 +2,18 @@
  * Single import surface for everything still borrowed from `snyk-api-import`.
  *
  * That package is in maintenance mode and slated for replacement, so this file
- * exists to keep the borrowed surface in one reviewable place. It is shrinking:
- * the Snyk Import API calls (import, poll, integrations) are now ours, in
- * ./snyk. What remains is SCM repo discovery and the dedup helper.
+ * keeps the borrowed surface in one reviewable place. It is nearly empty now:
+ * the Snyk Import API calls live in ./snyk and SCM repo discovery in ./scm.
+ * What remains is the dedup helper, which reads existing Snyk projects and
+ * reconstructs targets from their names.
  *
  * IMPORTANT: import from deep paths, never the package root.
  * `snyk-api-import`'s entry (`dist/index.js`) runs `yargs(...).parse()` at
- * module top level, so `require`-ing it self-executes the CLI. The `dist/lib`
- * barrel and the individual script files below have no such side effect.
+ * module top level, so `require`-ing it self-executes the CLI.
  */
 
 // ---------------------------------------------------------------------------
-// Ours — talks to Snyk's documented v1 Import API directly.
+// Ours — Snyk's documented v1 Import API.
 // ---------------------------------------------------------------------------
 export { importTarget, importTargets } from './snyk/import';
 export type { ImportKickoffFailure, ImportKickoffResult } from './snyk/import';
@@ -25,21 +25,18 @@ export { generateTargetId } from './snyk/target-id';
 export type { Target, ImportTarget, FilePath, Project } from './snyk/types';
 
 // ---------------------------------------------------------------------------
-// Still borrowed — SCM repo discovery.
+// Ours — SCM repo discovery, over the providers' public REST APIs.
 // ---------------------------------------------------------------------------
+export { listGithubRepos } from './scm/github';
+export { listGitlabRepos } from './scm/gitlab';
+export { listAzureRepos } from './scm/azure';
+export { listBitbucketServerRepos } from './scm/bitbucket-server';
 export {
-  listGithubRepos,
-  listGitlabRepos,
-  listAzureRepos,
-  listBitbucketServerRepos,
-} from 'snyk-api-import/dist/lib';
-
-// Bitbucket Cloud isn't re-exported from the lib barrel (its list-repos takes
-// an explicit auth config rather than reading an env var itself, unlike the
-// others) — reachable only via its own files.
-export { listRepos as listBitbucketCloudRepos } from 'snyk-api-import/dist/lib/source-handlers/bitbucket-cloud/list-repos';
-export { getBitbucketCloudAuth } from 'snyk-api-import/dist/lib/source-handlers/bitbucket-cloud/get-bitbucket-cloud-auth';
-export type { BitbucketCloudAuthConfig } from 'snyk-api-import/dist/lib/source-handlers/bitbucket-cloud/types';
+  listBitbucketCloudRepos,
+  getBitbucketCloudAuth,
+} from './scm/bitbucket-cloud';
+export type { BitbucketCloudAuthConfig } from './scm/bitbucket-cloud';
+export { ScmError } from './scm/http';
 
 // ---------------------------------------------------------------------------
 // Still borrowed — dedup against existing Snyk state.

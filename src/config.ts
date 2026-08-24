@@ -31,7 +31,7 @@ export interface Credentials {
   bitbucketServerToken?: string;
 }
 
-/** The env var `snyk-api-import` reads each stored credential from. */
+/** The env var each stored credential is published to for discovery/import. */
 export const CREDENTIAL_ENV_VARS: Record<keyof Credentials, string> = {
   snykToken: 'SNYK_TOKEN',
   githubToken: 'GITHUB_TOKEN',

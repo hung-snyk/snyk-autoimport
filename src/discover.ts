@@ -1,14 +1,14 @@
 /**
- * SCM repo discovery. GitHub only for now — reuses `snyk-api-import`'s
- * `listGithubRepos`, which walks the GitHub API (auth via GITHUB_TOKEN) and
- * returns every non-archived repo in an org.
+ * GitHub repo discovery — shared by all three GitHub-family sources (github,
+ * github-cloud-app, github-enterprise), which read the same GitHub REST API
+ * with a PAT (GITHUB_TOKEN) and return every non-archived repo in an org.
  *
  * Deliberately org-only: `listGithubRepos` calls GitHub's *organization*
  * repos endpoint, which 404s for a personal account (github.com/<user> is
  * not an org). This is a real, cross-cutting limitation of all three
- * GitHub-family sources (github, github-cloud-app, github-enterprise), not
- * something specific to one integration type — see README. We surface it
- * as a clear, actionable error rather than let GitHub's raw 404 through.
+ * GitHub-family sources, not something specific to one integration type — see
+ * README. We surface it as a clear, actionable error rather than let GitHub's
+ * raw 404 through.
  */
 import { listGithubRepos, type ImportTarget } from './api';
 
