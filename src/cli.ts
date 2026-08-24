@@ -14,10 +14,6 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
-// Silence Node deprecation warnings (e.g. url.parse) emitted from deep inside
-// the still-borrowed snyk-api-import dedup helper — not actionable for our users.
-(process as { noDeprecation?: boolean }).noDeprecation = true;
-
 import {
   configFilePath,
   setCredentials,
@@ -358,6 +354,7 @@ async function importCmd(args: ImportArgs): Promise<void> {
   console.log(`✓ Found ${candidates.length} repo(s)`);
 
   const { toImport, alreadyImported } = await filterAlreadyImported(
+    rm,
     org.id,
     candidates,
     sourceDef.dedupType,

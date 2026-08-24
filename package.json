@@ -1,7 +1,7 @@
 {
   "name": "snyk-autoimport",
   "version": "0.1.0",
-  "description": "One-command bulk repo import into Snyk. A friendly wrapper around snyk-api-import.",
+  "description": "One-command bulk repo import into Snyk.",
   "bin": {
     "snyk-autoimport": "dist/cli.js"
   },
@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "env-paths": "2.2.1",
-    "snyk-api-import": "2.23.2",
     "snyk-request-manager": "1.9.3",
     "yargs": "16.2.0"
   },

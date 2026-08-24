@@ -16,16 +16,23 @@ export interface SnykResponse<T> {
   headers?: Record<string, string | string[] | undefined>;
 }
 
+/**
+ * `useRest` switches the request manager from the v1 base to the REST base
+ * (`/rest/`), which it derives from the same configured host — so the region
+ * stays correct either way.
+ */
 export async function snykRequest<T>(
   rm: requestsManager,
   verb: 'get' | 'post',
   url: string,
   body: unknown = {},
+  useRest = false,
 ): Promise<SnykResponse<T>> {
   return (await rm.request({
     verb,
     url,
     body: JSON.stringify(body),
+    ...(useRest ? { useRESTApi: true } : {}),
   })) as SnykResponse<T>;
 }
 

@@ -3,11 +3,15 @@
 Bulk-import repositories from your source control management (SCM) provider into
 a Snyk organization with a single command.
 
-`snyk-autoimport` is a command-line wrapper around
-[`snyk-api-import`](https://github.com/snyk/snyk-api-import). It resolves your
-Snyk organization and SCM integration, discovers repositories, skips anything
-already imported, submits the import, and reports the outcome — replacing the
-hand-authored JSON files and log-file inspection the underlying tool requires.
+`snyk-autoimport` is a self-contained command-line tool. It resolves your Snyk
+organization and SCM integration, discovers repositories, skips anything already
+imported, submits the import, and reports the outcome — replacing the
+hand-authored JSON files and log-file inspection that bulk importing otherwise
+requires.
+
+It talks directly to Snyk's documented
+[Import API](https://docs.snyk.io/developer-tools/snyk-api/reference/import-projects-v1)
+and to each SCM provider's public REST API.
 
 > **Support notice**
 >
@@ -15,11 +19,11 @@ hand-authored JSON files and log-file inspection the underlying tool requires.
 > product and is not covered by Snyk support or any Snyk service agreement.
 > It is provided as-is for evaluation and internal automation use.
 >
-> The project currently builds on `snyk-api-import`, which Snyk has placed in
-> maintenance mode and plans to replace. `snyk-autoimport` isolates that
-> dependency behind a single internal module, so the command-line interface and
-> stored credentials are expected to remain stable if the underlying engine
-> changes.
+> The tool depends only on documented, public APIs — Snyk's Import API and each
+> SCM provider's REST API — so it does not inherit the lifecycle of any single
+> Snyk-maintained CLI. It previously wrapped `snyk-api-import`, which Snyk has
+> placed in maintenance mode and plans to replace; that dependency has been
+> removed.
 
 ## Contents
 
@@ -41,7 +45,7 @@ hand-authored JSON files and log-file inspection the underlying tool requires.
 | Requirement | Details |
 |---|---|
 | Node.js | 20 or later |
-| npm registry access | Required during installation. Dependencies, including `snyk-api-import`, are downloaded from the public npm registry. |
+| npm registry access | Required during installation. Dependencies are downloaded from the public npm registry. |
 | Snyk API token | Required. Token type depends on the integration — see [Supported sources](#supported-sources). |
 | SCM access token | Required. Snyk cannot expose the credential stored on an SCM integration, so repository discovery needs its own token. |
 | Configured Snyk integration | The target Snyk organization must already have the relevant SCM integration configured. |
@@ -49,8 +53,7 @@ hand-authored JSON files and log-file inspection the underlying tool requires.
 ## Installation
 
 This project is not published to npm, so clone the repository and build it
-locally. You do **not** need to install `snyk-api-import` separately — it is a
-normal dependency and `npm install` fetches it automatically.
+locally.
 
 ```bash
 git clone https://github.com/hung-snyk/snyk-autoimport.git
@@ -198,9 +201,9 @@ already imported, submits the remainder, and prints a summary.
   discovered automatically.
 - **`bitbucket-server`** — Import targets carry no branch information, so the
   repository default branch is always used.
-- **`github-server-app`** — Not supported. `snyk-api-import` provides no
-  deduplication support for this integration's project origin, so enabling it
-  could produce duplicate imports. The CLI rejects it explicitly.
+- **`github-server-app`** — Not supported. This integration's project origin has
+  no verified deduplication mapping, so enabling it could silently skip or
+  duplicate repositories. The CLI rejects it explicitly.
 - Personal (non-organization) GitHub accounts are not supported. Discovery uses
   each provider's organization or group API.
 
@@ -322,12 +325,10 @@ command is safe to run on a schedule to pick up newly created repositories.
   re-attempted on each run. This is harmless and never creates duplicates.
 - **A separate SCM token is always required.** Snyk's API does not return the
   credential stored on an SCM integration.
-- **Systemic failures can terminate the process early.** `snyk-api-import`
-  calls `process.exit(1)` after roughly 30 consecutive failed submissions,
-  which prevents the summary from printing. To limit the impact, the first
-  repository is imported alone as a canary, so configuration problems that
-  affect every repository surface on the first failure. A failure pattern
-  spread thinly across a very large batch can still reach the threshold.
+- **Systemic failures surface on the first repository.** The first repository
+  is imported alone as a canary, so a configuration problem that would affect
+  every repository stops the run immediately with a clear message rather than
+  repeating across the whole batch.
 - **Imports are polled inline** with no overall timeout. There is no command to
   check the status of a previously started import.
 - **Only GitHub sources are verified end to end.** Other providers are

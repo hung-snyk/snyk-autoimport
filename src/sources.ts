@@ -11,12 +11,12 @@
  * which credential the discovery step needs.
  *
  * NOTE: "github-server-app" (the GitHub App variant for self-hosted GitHub
- * Enterprise Server) is intentionally NOT included. snyk-api-import has no
- * dedup target-generator registered for that origin, so wiring it up would
- * either crash `filterAlreadyImported` or silently skip dedup — unsafe
- * without a live org to verify against. Revisit if that becomes a real need.
+ * Enterprise Server) is intentionally NOT included. Its project origin has no
+ * verified dedup mapping, so wiring it up would either skip dedup or match on
+ * the wrong rules — unsafe without a live org to verify against. Revisit if
+ * that becomes a real need.
  */
-import { SupportedIntegrationTypesToListSnykTargets } from './api';
+import { SnykProjectOrigin } from './api';
 
 export const GITHUB_CLOUD_APP_SOURCE = 'github-cloud-app';
 
@@ -25,44 +25,44 @@ export const GITHUB_CLOUD_APP_SOURCE = 'github-cloud-app';
 export type TokenRequirement = { envVar: string } | { special: 'bitbucket-cloud' };
 
 export interface SourceDef {
-  dedupType: SupportedIntegrationTypesToListSnykTargets;
+  dedupType: SnykProjectOrigin;
   requiresSourceUrl: boolean;
   token: TokenRequirement;
 }
 
 export const SOURCES: Record<string, SourceDef> = {
   github: {
-    dedupType: SupportedIntegrationTypesToListSnykTargets.GITHUB,
+    dedupType: SnykProjectOrigin.GITHUB,
     requiresSourceUrl: false,
     token: { envVar: 'GITHUB_TOKEN' },
   },
   [GITHUB_CLOUD_APP_SOURCE]: {
-    dedupType: SupportedIntegrationTypesToListSnykTargets.GITHUB_CLOUD_APP,
+    dedupType: SnykProjectOrigin.GITHUB_CLOUD_APP,
     requiresSourceUrl: false,
     token: { envVar: 'GITHUB_TOKEN' },
   },
   'github-enterprise': {
-    dedupType: SupportedIntegrationTypesToListSnykTargets.GHE,
+    dedupType: SnykProjectOrigin.GHE,
     requiresSourceUrl: true, // getGithubBaseUrl silently defaults to public GitHub otherwise
     token: { envVar: 'GITHUB_TOKEN' },
   },
   gitlab: {
-    dedupType: SupportedIntegrationTypesToListSnykTargets.GITLAB,
+    dedupType: SnykProjectOrigin.GITLAB,
     requiresSourceUrl: false, // safe default: gitlab.com
     token: { envVar: 'GITLAB_TOKEN' },
   },
   'azure-repos': {
-    dedupType: SupportedIntegrationTypesToListSnykTargets.AZURE_REPOS,
+    dedupType: SnykProjectOrigin.AZURE_REPOS,
     requiresSourceUrl: false, // safe default: dev.azure.com
     token: { envVar: 'AZURE_TOKEN' },
   },
   'bitbucket-server': {
-    dedupType: SupportedIntegrationTypesToListSnykTargets.BITBUCKET_SERVER,
+    dedupType: SnykProjectOrigin.BITBUCKET_SERVER,
     requiresSourceUrl: true, // no public default host exists for self-hosted Bitbucket Server
     token: { envVar: 'BITBUCKET_SERVER_TOKEN' },
   },
   'bitbucket-cloud': {
-    dedupType: SupportedIntegrationTypesToListSnykTargets.BITBUCKET_CLOUD,
+    dedupType: SnykProjectOrigin.BITBUCKET_CLOUD,
     requiresSourceUrl: false, // fixed host: api.bitbucket.org
     token: { special: 'bitbucket-cloud' },
   },
@@ -81,6 +81,6 @@ export const REQUIRES_SOURCE_URL = new Set(
  */
 export const KNOWN_UNSUPPORTED: Record<string, string> = {
   'github-server-app':
-    'snyk-api-import has no dedup support for this integration\'s project origin — ' +
-    'wiring it up risks a crash in dedup and there is no verified org to test against. See README.',
+    'no dedup mapping exists for this integration\'s project origin, and there is ' +
+    'no verified org to test one against — wiring it up blind risks silently skipping repos. See README.',
 };

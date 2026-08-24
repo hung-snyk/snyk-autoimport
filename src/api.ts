@@ -1,32 +1,32 @@
 /**
- * Single import surface for everything still borrowed from `snyk-api-import`.
+ * The tool's own API surface: everything it does against Snyk and the SCMs.
  *
- * That package is in maintenance mode and slated for replacement, so this file
- * keeps the borrowed surface in one reviewable place. It is nearly empty now:
- * the Snyk Import API calls live in ./snyk and SCM repo discovery in ./scm.
- * What remains is the dedup helper, which reads existing Snyk projects and
- * reconstructs targets from their names.
- *
- * IMPORTANT: import from deep paths, never the package root.
- * `snyk-api-import`'s entry (`dist/index.js`) runs `yargs(...).parse()` at
- * module top level, so `require`-ing it self-executes the CLI.
+ * This file used to re-export borrowed pieces of `snyk-api-import` and exists
+ * to keep that surface reviewable in one place. Nothing is borrowed any more —
+ * ./snyk talks to Snyk's documented APIs and ./scm to each provider's public
+ * REST API — so it is now just the tool's internal barrel.
  */
 
-// ---------------------------------------------------------------------------
-// Ours — Snyk's documented v1 Import API.
-// ---------------------------------------------------------------------------
+// --- Snyk: import, poll, integrations ---------------------------------------
 export { importTarget, importTargets } from './snyk/import';
 export type { ImportKickoffFailure, ImportKickoffResult } from './snyk/import';
 export { pollImportUrl, pollImportUrls } from './snyk/poll';
 export type { FailedProject, PollFailure, PollResult } from './snyk/poll';
 export { listIntegrations } from './snyk/integrations';
 export type { IntegrationsMap } from './snyk/integrations';
-export { generateTargetId } from './snyk/target-id';
 export type { Target, ImportTarget, FilePath, Project } from './snyk/types';
 
-// ---------------------------------------------------------------------------
-// Ours — SCM repo discovery, over the providers' public REST APIs.
-// ---------------------------------------------------------------------------
+// --- Snyk: what is already imported, for dedup ------------------------------
+export { generateTargetId } from './snyk/target-id';
+export {
+  listImportedTargets,
+  listSnykProjects,
+  projectToTarget,
+} from './snyk/imported-targets';
+export type { SnykProject } from './snyk/imported-targets';
+export { SnykProjectOrigin } from './snyk/origins';
+
+// --- SCM: repo discovery ----------------------------------------------------
 export { listGithubRepos } from './scm/github';
 export { listGitlabRepos } from './scm/gitlab';
 export { listAzureRepos } from './scm/azure';
@@ -37,9 +37,3 @@ export {
 } from './scm/bitbucket-cloud';
 export type { BitbucketCloudAuthConfig } from './scm/bitbucket-cloud';
 export { ScmError } from './scm/http';
-
-// ---------------------------------------------------------------------------
-// Still borrowed — dedup against existing Snyk state.
-// ---------------------------------------------------------------------------
-export { generateSnykImportedTargets } from 'snyk-api-import/dist/scripts/generate-imported-targets-from-snyk';
-export { SupportedIntegrationTypesToListSnykTargets } from 'snyk-api-import/dist/lib/types';
