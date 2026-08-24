@@ -54,7 +54,26 @@ import { SOURCES, REQUIRES_SOURCE_URL, KNOWN_UNSUPPORTED, GITHUB_CLOUD_APP_SOURC
 import { printSummary } from './report';
 import { describeTarget } from './target-format';
 import { ask, askSecret, confirm, isInteractive } from './prompt';
-import { getBitbucketCloudAuth, type ImportTarget } from './api';
+import { getBitbucketCloudAuth, type ImportTarget, type PollProgress } from './api';
+
+/** "1m 30s" / "45s" — short enough to sit inside a status line. */
+function formatElapsed(ms: number): string {
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m ${String(seconds % 60).padStart(2, '0')}s`;
+}
+
+/**
+ * Heartbeat while Snyk scans. Without it the CLI prints "Importing..." and
+ * then nothing for minutes, which is indistinguishable from a hung process.
+ * Plain appended lines rather than an in-place spinner, so piped output and
+ * CI logs stay readable.
+ */
+function reportProgress({ completed, total, elapsedMs }: PollProgress): void {
+  const scope = total > 1 ? ` — ${completed}/${total} repos done` : '';
+  console.log(`  … still scanning (${formatElapsed(elapsedMs)})${scope}`);
+}
 
 /** `Label: `, noting when a value already exists so blank is a real choice. */
 function secretPrompt(key: keyof Credentials, existing: Credentials): string {
@@ -391,14 +410,19 @@ async function importCmd(args: ImportArgs): Promise<void> {
     }
   }
 
-  console.log('\nImporting...');
+  console.log(
+    '\nImporting... Snyk clones each repo and scans it for manifests, which ' +
+      'usually takes a few minutes.',
+  );
 
   // Canary: submit the first target alone before the rest. A failure on the
   // very first repo is almost always systemic (wrong token or integration) and
   // would repeat for every remaining repo, so stopping here turns a long run of
   // identical failures into one clear message.
   const [canaryTarget, ...restTargets] = toImport;
-  const canaryOutcome = await runImport(rm, [canaryTarget]);
+  const canaryOutcome = await runImport(rm, [canaryTarget], {
+    onProgress: reportProgress,
+  });
 
   if (canaryOutcome.kickoffFailures > 0) {
     printSummary(canaryOutcome, { source: args.source });
@@ -413,7 +437,9 @@ async function importCmd(args: ImportArgs): Promise<void> {
 
   let outcome = canaryOutcome;
   if (restTargets.length > 0) {
-    const restOutcome = await runImport(rm, restTargets);
+    const restOutcome = await runImport(rm, restTargets, {
+      onProgress: reportProgress,
+    });
     outcome = mergeOutcomes(canaryOutcome, restOutcome);
   }
   printSummary(outcome, { source: args.source });

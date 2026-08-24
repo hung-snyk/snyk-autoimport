@@ -15,9 +15,21 @@ import { describeError, formatError, snykRequest, statusOf } from './http';
 import { toPollingPath } from './import';
 import type { PollImportResponse, Project } from './types';
 
-const POLL_INTERVAL_MS = 20_000;
+/**
+ * Polling starts fast and backs off to a steady interval.
+ *
+ * A fixed 20s interval made every import take at least 20s to report, even
+ * one Snyk had already finished — a repo with no manifests completes almost
+ * immediately server-side. Starting at 2s and doubling to the same 20s cap
+ * keeps long imports just as cheap (a 2-minute job costs one extra request)
+ * while making short ones feel immediate.
+ */
+const FIRST_POLL_INTERVAL_MS = 2_000;
+const MAX_POLL_INTERVAL_MS = 20_000;
 const MAX_POLL_ATTEMPTS = 1_000;
 const POLL_CONCURRENCY = 10;
+/** How often to report that a long import is still running. */
+const PROGRESS_INTERVAL_MS = 15_000;
 
 export interface FailedProject extends Project {
   locationUrl: string;
@@ -37,9 +49,25 @@ export interface PollResult {
   pollFailures: PollFailure[];
 }
 
+export interface PollProgress {
+  /** Import jobs finished so far. */
+  completed: number;
+  total: number;
+  elapsedMs: number;
+}
+
 export interface PollOptions {
+  /** Fixed interval; omit to use the backoff described above. */
   intervalMs?: number;
   maxAttempts?: number;
+  /**
+   * Called periodically while jobs are still running, so a caller can show
+   * that a slow import is alive rather than hung. Driven by its own timer,
+   * not by poll timing, so the cadence stays predictable.
+   */
+  onProgress?: (progress: PollProgress) => void;
+  /** Heartbeat cadence; exists so tests can assert it without waiting 15s. */
+  progressIntervalMs?: number;
 }
 
 /** Poll one job until it reports `complete`, then return its projects. */
@@ -51,9 +79,9 @@ export async function pollImportUrl(
   if (!locationUrl) {
     throw new Error('Missing required parameter: location url.');
   }
-  const intervalMs = options.intervalMs ?? POLL_INTERVAL_MS;
   const maxAttempts = options.maxAttempts ?? MAX_POLL_ATTEMPTS;
   const path = toPollingPath(locationUrl);
+  let wait = options.intervalMs ?? FIRST_POLL_INTERVAL_MS;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const res = await snykRequest<PollImportResponse>(rm, 'get', path);
@@ -65,7 +93,11 @@ export async function pollImportUrl(
 
     const job = res.data;
     if (job?.status && job.status !== 'complete') {
-      await sleep(intervalMs);
+      await sleep(wait);
+      // A caller-supplied interval is honoured as-is; otherwise back off.
+      if (options.intervalMs === undefined) {
+        wait = Math.min(wait * 2, MAX_POLL_INTERVAL_MS);
+      }
       continue;
     }
     return (job?.logs ?? []).flatMap((log) => log.projects ?? []);
@@ -89,10 +121,26 @@ export async function pollImportUrls(
   const failed: FailedProject[] = [];
   const pollFailures: PollFailure[] = [];
 
-  await mapWithConcurrency(
-    [...new Set(locationUrls)],
-    POLL_CONCURRENCY,
-    async (locationUrl) => {
+  const jobs = [...new Set(locationUrls)];
+  const startedAt = Date.now();
+  let completed = 0;
+
+  // Reporting runs on its own timer rather than per poll, so the cadence a
+  // user sees does not change as the backoff grows. unref() keeps it from
+  // holding the process open if everything else has finished.
+  const ticker = options.onProgress
+    ? setInterval(() => {
+        options.onProgress?.({
+          completed,
+          total: jobs.length,
+          elapsedMs: Date.now() - startedAt,
+        });
+      }, options.progressIntervalMs ?? PROGRESS_INTERVAL_MS)
+    : undefined;
+  ticker?.unref?.();
+
+  try {
+    await mapWithConcurrency(jobs, POLL_CONCURRENCY, async (locationUrl) => {
       try {
         for (const project of await pollImportUrl(rm, locationUrl, options)) {
           if (project.success) projects.push(project);
@@ -103,9 +151,13 @@ export async function pollImportUrls(
           locationUrl,
           errorMessage: formatError(describeError(error)),
         });
+      } finally {
+        completed++;
       }
-    },
-  );
+    });
+  } finally {
+    if (ticker) clearInterval(ticker);
+  }
 
   return { projects, failed, pollFailures };
 }

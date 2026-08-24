@@ -11,7 +11,12 @@
 export { importTarget, importTargets } from './snyk/import';
 export type { ImportKickoffFailure, ImportKickoffResult } from './snyk/import';
 export { pollImportUrl, pollImportUrls } from './snyk/poll';
-export type { FailedProject, PollFailure, PollResult } from './snyk/poll';
+export type {
+  FailedProject,
+  PollFailure,
+  PollProgress,
+  PollResult,
+} from './snyk/poll';
 export { listIntegrations } from './snyk/integrations';
 export type { IntegrationsMap } from './snyk/integrations';
 export type { Target, ImportTarget, FilePath, Project } from './snyk/types';

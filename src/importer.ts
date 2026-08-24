@@ -6,7 +6,7 @@
  * `pollImportUrls` then waits for each job and returns the project results.
  */
 import type { requestsManager } from 'snyk-request-manager';
-import { importTargets, pollImportUrls, type ImportTarget } from './api';
+import { importTargets, pollImportUrls, type ImportTarget, type PollProgress } from './api';
 import type { FailureEntry } from './failures';
 
 export interface ImportOutcome {
@@ -19,12 +19,24 @@ export interface ImportOutcome {
   submittedTargets: number;
 }
 
+export interface RunOptions {
+  /**
+   * Called while Snyk is still scanning. Without this the CLI prints
+   * "Importing..." and then nothing for as long as the scan takes — which
+   * on a real repo is minutes, and reads as a hung process.
+   */
+  onProgress?: (progress: PollProgress) => void;
+}
+
 export async function runImport(
   rm: requestsManager,
   targets: ImportTarget[],
+  options: RunOptions = {},
 ): Promise<ImportOutcome> {
   const { pollingUrls, failures } = await importTargets(rm, targets);
-  const { projects, failed, pollFailures } = await pollImportUrls(rm, pollingUrls);
+  const { projects, failed, pollFailures } = await pollImportUrls(rm, pollingUrls, {
+    onProgress: options.onProgress,
+  });
 
   return {
     createdProjects: projects.map((p) => ({
