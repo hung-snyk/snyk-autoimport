@@ -181,7 +181,7 @@ already imported, submits the remainder, and prints a summary.
 | `--source` | Discovery credential | `--source-url` | Verification status |
 |---|---|---|---|
 | `github-cloud-app` | `GITHUB_TOKEN` | Not required | Verified end to end |
-| `github` | `GITHUB_TOKEN` | Not required | Verified end to end |
+| `github` | `GITHUB_TOKEN` | Not required | Verified end to end (classic integration requires a personal Snyk token) |
 | `github-enterprise` | `GITHUB_TOKEN` | **Required** | Implemented, not yet verified live |
 | `gitlab` | `GITLAB_TOKEN` | Optional (defaults to gitlab.com) | Implemented, not yet verified live |
 | `azure-repos` | `AZURE_TOKEN` | Optional (defaults to dev.azure.com) | Implemented, not yet verified live |
@@ -343,9 +343,18 @@ npm run build   # compile TypeScript to dist/
 npm run clean   # remove build output
 ```
 
-All application code lives in `src/`. The maintainers' test suite is kept
-outside this repository, so `npm run build` is the only step needed to produce a
-working command.
+All application code lives in `src/`, organized as:
+
+| Directory | Responsibility |
+|---|---|
+| `src/snyk/` | Snyk API calls — import, poll, integrations, and the project lookup used for deduplication. |
+| `src/scm/` | Repository discovery, one module per provider, over each provider's public REST API. |
+| `src/*.ts` | CLI, configuration, credential store, reporting, and the per-source adapters that join the two layers. |
+
+The tool uses the Node runtime's built-in `fetch`, so no HTTP or provider SDK
+dependencies are required. The maintainers' test suite is kept outside this
+repository, so `npm run build` is the only step needed to produce a working
+command.
 
 ## License
 
