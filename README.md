@@ -3,33 +3,35 @@
 Bulk-import repositories from your source control management (SCM) provider into
 a Snyk organization with a single command.
 
-`snyk-autoimport` is a self-contained command-line tool. It resolves your Snyk
-organization and SCM integration, discovers repositories, skips anything already
-imported, submits the import, and reports the outcome — replacing the
-hand-authored JSON files and log-file inspection that bulk importing otherwise
-requires.
+`snyk-autoimport` resolves your Snyk organization and SCM integration, discovers
+repositories, skips anything already imported, submits the import, and reports
+the outcome — replacing the hand-authored JSON files, multi-step commands, and
+log-file inspection that bulk importing otherwise requires.
 
-It talks directly to Snyk's documented
+```bash
+node dist/cli.js import --snyk-org "Acme Corp" --source github-cloud-app --source-org acme-corp
+```
+
+**Self-contained.** The tool talks directly to Snyk's documented
 [Import API](https://docs.snyk.io/developer-tools/snyk-api/reference/import-projects-v1)
-and to each SCM provider's public REST API.
+and to each SCM provider's public REST API. It has three runtime dependencies
+and no HTTP client or provider SDKs — repository discovery across all five
+providers uses the Node runtime's built-in `fetch`. Nothing here wraps another
+CLI, so its behaviour is tied only to APIs Snyk and the providers publish and
+version.
 
 > **Support notice**
 >
 > This is an independent, community project. It is **not** an official Snyk
-> product and is not covered by Snyk support or any Snyk service agreement.
-> It is provided as-is for evaluation and internal automation use.
->
-> The tool depends only on documented, public APIs — Snyk's Import API and each
-> SCM provider's REST API — so it does not inherit the lifecycle of any single
-> Snyk-maintained CLI. It previously wrapped `snyk-api-import`, which Snyk has
-> placed in maintenance mode and plans to replace; that dependency has been
-> removed.
+> product and is not covered by Snyk support or any Snyk service agreement. It
+> is provided as-is for evaluation and internal automation use.
 
 ## Contents
 
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Quick start](#quick-start)
+- [What an import looks like](#what-an-import-looks-like)
 - [Commands](#commands)
 - [Supported sources](#supported-sources)
 - [Regions](#regions)
@@ -44,8 +46,8 @@ and to each SCM provider's public REST API.
 
 | Requirement | Details |
 |---|---|
-| Node.js | 20 or later |
-| npm registry access | Required during installation. Dependencies are downloaded from the public npm registry. |
+| Node.js | 20 or later. The tool uses the runtime's built-in `fetch`. |
+| npm registry access | Required during installation, for three runtime dependencies and the TypeScript build. |
 | Snyk API token | Required. Token type depends on the integration — see [Supported sources](#supported-sources). |
 | SCM access token | Required. Snyk cannot expose the credential stored on an SCM integration, so repository discovery needs its own token. |
 | Configured Snyk integration | The target Snyk organization must already have the relevant SCM integration configured. |
@@ -103,6 +105,38 @@ node dist/cli.js import \
 
 Re-running the same command is safe. Repositories already present in Snyk are
 skipped automatically, so a partially failed run can simply be repeated.
+
+## What an import looks like
+
+```text
+✓ Resolved "Acme Corp" → d2f6e6d5-a481-4d4f-977d-349d689207cf (group: Acme Ltd)
+✓ Using github-cloud-app integration 0686349f-4442-415e-ae17-88713c79d964
+Discovering repos in acme-corp...
+✓ Found 24 repo(s)
+✓ 21 already imported — 3 new to import
+
+Importing... Snyk clones each repo and scans it for manifests, which usually takes a few minutes.
+  … still scanning (15s) — 0/3 repos done
+  … still scanning (30s) — 1/3 repos done
+  … still scanning (1m 15s) — 2/3 repos done
+
+Done.
+  11 project(s) created
+```
+
+**Expect the import step to take minutes, not seconds.** Snyk clones each
+repository server-side and scans it for manifests; a single repository commonly
+takes one to three minutes, and nothing on the client can make that faster. The
+`… still scanning` line is printed every 15 seconds so a long import is
+distinguishable from a stalled one.
+
+The counts mean different things and are worth reading precisely:
+
+- **repos** are what was discovered and submitted.
+- **projects** are what Snyk created — one per manifest it found. One repository
+  routinely produces several projects, and a repository with no supported
+  manifests produces none. `0 project(s) created` is a normal, successful result
+  for such a repository, not a failure.
 
 ## Commands
 
@@ -178,34 +212,43 @@ already imported, submits the remainder, and prints a summary.
 
 ## Supported sources
 
+Verification status is stated per source, because it is the most useful thing to
+know before pointing this at a production organization. "Verified end to end"
+means a real import against a live instance, not test coverage alone.
+
 | `--source` | Discovery credential | `--source-url` | Verification status |
 |---|---|---|---|
 | `github-cloud-app` | `GITHUB_TOKEN` | Not required | Verified end to end |
-| `github` | `GITHUB_TOKEN` | Not required | Verified end to end (classic integration requires a personal Snyk token) |
-| `github-enterprise` | `GITHUB_TOKEN` | **Required** | Implemented, not yet verified live |
-| `gitlab` | `GITLAB_TOKEN` | Optional (defaults to gitlab.com) | Implemented, not yet verified live |
-| `azure-repos` | `AZURE_TOKEN` | Optional (defaults to dev.azure.com) | Discovery and deduplication verified live; import not yet verified |
-| `bitbucket-server` | `BITBUCKET_SERVER_TOKEN` | **Required** | Implemented, not yet verified live |
-| `bitbucket-cloud` | See [below](#bitbucket-cloud-authentication) | Not required | Implemented, not yet verified live |
+| `github` | `GITHUB_TOKEN` | Not required | Verified end to end |
+| `azure-repos` | `AZURE_TOKEN` | Optional (defaults to dev.azure.com) | Verified end to end |
+| `github-enterprise` | `GITHUB_TOKEN` | **Required** | Implemented and unit-tested; not exercised against a live instance |
+| `gitlab` | `GITLAB_TOKEN` | Optional (defaults to gitlab.com) | Implemented and unit-tested; not exercised against a live instance |
+| `bitbucket-server` | `BITBUCKET_SERVER_TOKEN` | **Required** | Implemented and unit-tested; not exercised against a live instance |
+| `bitbucket-cloud` | See [below](#bitbucket-cloud-authentication) | Not required | Implemented and unit-tested; not exercised against a live instance |
 
 ### Provider-specific notes
 
 - **`github-cloud-app`** — Works with a Snyk service account token. The Snyk
   GitHub App installation must be granted access to each repository you intend
-  to import; repositories it cannot see fail with a `404` during import.
+  to import. Discovery uses your own token, which typically sees more
+  repositories than the App was granted, so repositories it cannot see are
+  discovered but fail with a `404` during import.
 - **`github` and `github-enterprise`** — Require a **personal** Snyk API token.
   These integrations authenticate through a personal GitHub OAuth link, so a
   service account token returns `401` when starting an import.
-- **`gitlab`** — `--source-org` is a GitLab group name.
-- **`azure-repos`** — Repositories across every project in the organization are
-  discovered automatically.
-- **`bitbucket-server`** — Import targets carry no branch information, so the
-  repository default branch is always used.
+- **`gitlab`** — `--source-org` is a GitLab group name, and may be a nested path
+  such as `group/subgroup`.
+- **`azure-repos`** — `--source-org` is the Azure DevOps organization.
+  Repositories across every project in that organization are discovered
+  automatically; you do not name projects individually.
+- **`bitbucket-server`** — `--source-org` is the Bitbucket project **name**.
+  Import targets carry no branch information, so the repository default branch
+  is always used.
 - **`github-server-app`** — Not supported. This integration's project origin has
   no verified deduplication mapping, so enabling it could silently skip or
   duplicate repositories. The CLI rejects it explicitly.
-- Personal (non-organization) GitHub accounts are not supported. Discovery uses
-  each provider's organization or group API.
+- Personal (non-organization) accounts are not supported on any provider.
+  Discovery uses each provider's organization, group, or workspace API.
 
 ### Bitbucket Cloud authentication
 
@@ -260,13 +303,15 @@ for the full list of regional URLs.
 
 ## Credentials and configuration
 
-Credentials entered through `auth login` are written to
-`.snyk-autoimport.json` in the project root with `0600` permissions. The path
-is the same on macOS, Linux, and Windows, so it is predictable across customer
-environments. Run `auth status` to print it.
+Credentials entered through `auth login` are written to `.snyk-autoimport.json`
+with `0600` permissions. The path is the same on macOS, Linux, and Windows, so
+it is predictable across customer environments. Run `auth status` to print it.
 
-The location is resolved from the installed package, not the current working
-directory, so logging in once holds wherever you run the command from.
+The location is resolved from the **installed package directory**, not the
+current working directory, so logging in once holds wherever you run the command
+from. One consequence worth knowing: a second checkout of this repository — a
+`git worktree`, or a separate clone — is a separate package directory and needs
+its own login.
 
 > [!WARNING]
 > This file holds live Snyk and SCM tokens inside a git working tree. It is
@@ -281,10 +326,10 @@ and shared machines.
 
 Releases before this change stored credentials in a per-user OS directory
 (`~/Library/Preferences/` on macOS, `~/.config/` on Linux). That file is still
-read if the project-root one is absent, so an existing install keeps working.
-Nothing is copied automatically; `auth status` reports when the old location is
-in use, and the next `auth login` writes to the new path — delete the old file
-afterwards.
+read if the package-directory one is absent, so an existing install keeps
+working. Nothing is copied automatically; `auth status` reports when the old
+location is in use, and the next `auth login` writes to the new path — delete
+the old file afterwards.
 
 ## Continuous integration
 
@@ -303,37 +348,43 @@ SNYK_TOKEN="$SNYK_TOKEN" GITHUB_TOKEN="$GITHUB_TOKEN" \
 Because deduplication runs against live Snyk state on every execution, the
 command is safe to run on a schedule to pick up newly created repositories.
 
+Budget for wall-clock time rather than a fixed timeout: the run lasts as long as
+Snyk takes to scan every submitted repository. `CONCURRENT_IMPORTS` (default
+`15`) caps how many are submitted at once.
+
 ## How it works
 
 1. **Resolve the organization.** `--snyk-org-id` is used directly. A name or
    slug is resolved against the organizations your token can see; ambiguous
-   names fail rather than resolving arbitrarily.
+   names fail rather than resolving arbitrarily, because Snyk organization names
+   are not unique.
 2. **Resolve the integration.** The `--source` value selects the integration
    configured on that organization.
 3. **Discover repositories.** The provider's API is queried with your SCM token.
-   Archived repositories are excluded.
-4. **Deduplicate.** Discovered repositories are compared against projects
-   already present in Snyk, and matches are removed.
-5. **Import and report.** Remaining repositories are submitted in batches and
-   polled to completion, then summarized with provider-specific guidance for
-   common failures such as `401` and `404` responses.
+   Archived repositories, and repositories with no default branch, are excluded.
+4. **Deduplicate.** Discovered repositories are compared against the projects
+   already present in Snyk, and matches are removed. This runs against live Snyk
+   state every time, never a cached list.
+5. **Import and report.** The first repository is submitted alone as a canary,
+   then the remainder. Each import job is polled to completion and the results
+   are summarized, with provider-specific guidance for common failures such as
+   `401` and `404` responses.
 
 ## Known limitations
 
-- **Repositories with no supported manifests.** These produce no Snyk project,
-  so they are not recorded in the APIs used for deduplication and will be
-  re-attempted on each run. This is harmless and never creates duplicates.
+- **Four providers are not verified against live instances** — `gitlab`,
+  `bitbucket-server`, `bitbucket-cloud`, and `github-enterprise`. They are
+  implemented and covered by the maintainers' tests, but have not been run
+  against a real server. See [Supported sources](#supported-sources).
+- **Repositories with no supported manifests** produce no Snyk project, so they
+  are not recorded in the APIs used for deduplication and will be re-attempted
+  on each run. This is harmless: re-importing an already-imported repository
+  does not duplicate it, because Snyk deduplicates server-side.
 - **A separate SCM token is always required.** Snyk's API does not return the
   credential stored on an SCM integration.
-- **Systemic failures surface on the first repository.** The first repository
-  is imported alone as a canary, so a configuration problem that would affect
-  every repository stops the run immediately with a clear message rather than
-  repeating across the whole batch.
 - **Imports are polled inline** with no overall timeout. There is no command to
-  check the status of a previously started import.
-- **Only GitHub sources are verified end to end.** Other providers are
-  implemented and covered by the maintainers' tests but have not been exercised
-  against live instances.
+  check the status of a previously started import, or to resume one.
+- **Forked repositories are included** with no option to exclude them.
 - **Not distributed through npm** or as a standalone binary.
 
 ## Development
@@ -343,18 +394,17 @@ npm run build   # compile TypeScript to dist/
 npm run clean   # remove build output
 ```
 
-All application code lives in `src/`, organized as:
+All application code lives in `src/`, organized in two layers:
 
 | Directory | Responsibility |
 |---|---|
-| `src/snyk/` | Snyk API calls — import, poll, integrations, and the project lookup used for deduplication. |
+| `src/snyk/` | Everything the tool does against Snyk: submitting imports, polling jobs to completion, listing integrations, and the project lookup that backs deduplication. |
 | `src/scm/` | Repository discovery, one module per provider, over each provider's public REST API. |
-| `src/*.ts` | CLI, configuration, credential store, reporting, and the per-source adapters that join the two layers. |
+| `src/*.ts` | CLI, configuration, credential store, reporting, and the per-source adapters joining the two layers. |
 
-The tool uses the Node runtime's built-in `fetch`, so no HTTP or provider SDK
-dependencies are required. The maintainers' test suite is kept outside this
-repository, so `npm run build` is the only step needed to produce a working
-command.
+Discovery uses the runtime's built-in `fetch`, so adding a provider costs no new
+dependency. The maintainers' test suite is kept outside this repository, so
+`npm run build` is the only step needed to produce a working command.
 
 ## License
 
