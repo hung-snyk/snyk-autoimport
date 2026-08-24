@@ -15,7 +15,12 @@
  * through this store. See config.ts's Credentials type for why.
  */
 import * as fs from 'fs';
-import { loadConfig, LOG_DIR } from './config';
+import {
+  loadConfig,
+  LOG_DIR,
+  CREDENTIAL_ENV_VARS,
+  CREDENTIAL_KEYS,
+} from './config';
 import {
   DEFAULT_REGION,
   REGION_API_HOSTS,
@@ -64,11 +69,9 @@ export function prepareEnv(region?: Region): PreparedEnv {
   const creds = config.credentials ?? {};
   const effectiveRegion = region ?? storedRegion(config.defaults?.region);
 
-  setIfAbsent('SNYK_TOKEN', creds.snykToken);
-  setIfAbsent('GITHUB_TOKEN', creds.githubToken);
-  setIfAbsent('GITLAB_TOKEN', creds.gitlabToken);
-  setIfAbsent('AZURE_TOKEN', creds.azureToken);
-  setIfAbsent('BITBUCKET_SERVER_TOKEN', creds.bitbucketServerToken);
+  for (const key of CREDENTIAL_KEYS) {
+    setIfAbsent(CREDENTIAL_ENV_VARS[key], creds[key]);
+  }
   setIfAbsent('SNYK_API', REGION_API_HOSTS[effectiveRegion]);
 
   // getLoggingPath() throws if SNYK_LOG_PATH is unset; the library writes

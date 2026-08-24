@@ -8,5 +8,8 @@ dist-test/
 # Internal design/decision log — not for distribution.
 NOTES.md
 
+# Local credential store. Holds live Snyk and SCM tokens — never commit it.
+.snyk-autoimport.json
+
 # Test suite — kept local, not part of the distributed repository.
 tests/

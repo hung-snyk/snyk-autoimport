@@ -109,11 +109,36 @@ Manages locally stored credentials.
 
 | Command | Description |
 |---|---|
-| `auth login` | Prompts for the Snyk API token, each SCM token, and the Snyk region. Blank entries leave existing values unchanged. Requires an interactive terminal. |
+| `auth login` | Asks for the Snyk API token, which source you import from, that source's token, and the Snyk region. Requires an interactive terminal. |
 | `auth status` | Shows the configuration file path, which credentials are set, and the configured region. Token values are never printed. |
 | `auth logout` | Removes stored credentials. |
 
-Bitbucket Cloud is not part of `auth login`; see
+`auth login` prompts for one source's token rather than all of them, so you
+only paste the credential you actually need:
+
+```text
+Snyk API token: ***
+
+Which source will you import from?
+  [1] github
+  [2] github-cloud-app
+  [3] github-enterprise  (needs --source-url)
+  [4] gitlab
+  [5] azure-repos
+  [6] bitbucket-server  (needs --source-url)
+  [7] bitbucket-cloud
+Pick one (1-7 or name): 4
+
+GitLab token: ***
+```
+
+Select the source by number or by its exact `--source` name; anything else is
+rejected and re-prompted. Typed tokens are masked, and a prompt left blank keeps
+whatever is already stored, so you can re-run the command to change one value.
+Run it again to add a second source's token.
+
+Selecting `bitbucket-cloud` stores nothing, because its three authentication
+methods are read from environment variables — see
 [Bitbucket Cloud authentication](#bitbucket-cloud-authentication).
 
 ### `integrations`
@@ -232,12 +257,31 @@ for the full list of regional URLs.
 
 ## Credentials and configuration
 
-Credentials entered through `auth login` are written to a per-user
-configuration file with `0600` permissions. Run `auth status` to display its
-exact location on your platform.
+Credentials entered through `auth login` are written to
+`.snyk-autoimport.json` in the project root with `0600` permissions. The path
+is the same on macOS, Linux, and Windows, so it is predictable across customer
+environments. Run `auth status` to print it.
+
+The location is resolved from the installed package, not the current working
+directory, so logging in once holds wherever you run the command from.
+
+> [!WARNING]
+> This file holds live Snyk and SCM tokens inside a git working tree. It is
+> listed in `.gitignore`, and that entry is load-bearing — do not remove it, and
+> do not `git add -f` the file. If you fork or copy this repository, confirm the
+> entry survived.
 
 Environment variables always take precedence over stored credentials, so
-automated environments can supply secrets without running `auth login`.
+automated environments can supply secrets without running `auth login` and
+without writing a token to disk at all. This is the recommended approach for CI
+and shared machines.
+
+Releases before this change stored credentials in a per-user OS directory
+(`~/Library/Preferences/` on macOS, `~/.config/` on Linux). That file is still
+read if the project-root one is absent, so an existing install keeps working.
+Nothing is copied automatically; `auth status` reports when the old location is
+in use, and the next `auth login` writes to the new path — delete the old file
+afterwards.
 
 ## Continuous integration
 

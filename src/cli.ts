@@ -24,6 +24,10 @@ import {
   clearCredentials,
   loadConfig,
   setRegion,
+  credentialKeyForEnvVar,
+  legacyConfigFilePath,
+  usingLegacyConfig,
+  CREDENTIAL_LABELS,
   type Credentials,
 } from './config';
 import {
@@ -56,29 +60,76 @@ import { describeTarget } from './target-format';
 import { ask, askSecret, confirm, isInteractive } from './prompt';
 import { getBitbucketCloudAuth, type ImportTarget } from './api';
 
+/** `Label: `, noting when a value already exists so blank is a real choice. */
+function secretPrompt(key: keyof Credentials, existing: Credentials): string {
+  const suffix = existing[key] ? ' [already set — blank keeps it]' : '';
+  return `${CREDENTIAL_LABELS[key]}${suffix}: `;
+}
+
+/**
+ * Which stored credential a source's token belongs in. Undefined for
+ * bitbucket-cloud, whose 3-method auth is read from its own env vars and is
+ * never persisted here (see config.ts).
+ */
+function credentialForSource(source: string): keyof Credentials | undefined {
+  const token = SOURCES[source].token;
+  return 'special' in token ? undefined : credentialKeyForEnvVar(token.envVar);
+}
+
+/** Require one of the supported sources, re-prompting until a valid pick. */
+async function promptForSource(): Promise<string> {
+  const names = Object.keys(SOURCES);
+  console.log('\nWhich source will you import from?');
+  names.forEach((name, i) => {
+    const note = REQUIRES_SOURCE_URL.has(name) ? '  (needs --source-url)' : '';
+    console.log(`  [${i + 1}] ${name}${note}`);
+  });
+
+  for (;;) {
+    const answer = await ask(`Pick one (1-${names.length} or name): `);
+    const byNumber = names[Number(answer) - 1];
+    const byName = SOURCES[answer.toLowerCase()] ? answer.toLowerCase() : undefined;
+    const picked = byNumber ?? byName;
+    if (picked) return picked;
+    console.log(
+      `  "${answer}" is not a supported source — enter a number from 1 to ` +
+        `${names.length}, or an exact name from the list.`,
+    );
+  }
+}
+
 async function authLogin(): Promise<void> {
   if (!isInteractive()) {
     throw new Error('auth login requires an interactive terminal.');
   }
+  const config = loadConfig();
+  const existing = config.credentials ?? {};
   console.log('Enter credentials (stored at ' + configFilePath() + ', chmod 600).');
-  console.log('Leave blank to keep an existing value.\n');
-
-  const snykToken = await askSecret('Snyk API token: ');
-  const githubToken = await askSecret('GitHub token (optional, for github/github-cloud-app/github-enterprise): ');
-  const gitlabToken = await askSecret('GitLab token (optional, for gitlab): ');
-  const azureToken = await askSecret('Azure DevOps token (optional, for azure-repos): ');
-  const bitbucketServerToken = await askSecret('Bitbucket Server token (optional, for bitbucket-server): ');
-  const currentRegion = loadConfig().defaults?.region ?? DEFAULT_REGION;
-  const regionInput = (
-    await ask(`Region — ${REGIONS.join(' / ')} [current: ${currentRegion}]: `)
-  ).trim();
+  console.log('Typed tokens are masked. Leave a prompt blank to keep its current value.\n');
 
   const creds: Credentials = {};
+
+  const snykToken = await askSecret(secretPrompt('snykToken', existing));
   if (snykToken) creds.snykToken = snykToken;
-  if (githubToken) creds.githubToken = githubToken;
-  if (gitlabToken) creds.gitlabToken = gitlabToken;
-  if (azureToken) creds.azureToken = azureToken;
-  if (bitbucketServerToken) creds.bitbucketServerToken = bitbucketServerToken;
+
+  const source = await promptForSource();
+  const key = credentialForSource(source);
+  if (!key) {
+    console.log(
+      `\n${source} authenticates through its own environment variables ` +
+        '(three methods across four variables), so nothing is stored for it here. ' +
+        'See the Bitbucket Cloud section of the README.',
+    );
+  } else {
+    console.log('');
+    const token = await askSecret(secretPrompt(key, existing));
+    if (token) creds[key] = token;
+  }
+
+  const currentRegion = config.defaults?.region ?? DEFAULT_REGION;
+  const regionInput = await ask(
+    `\nRegion — ${REGIONS.join(' / ')} [current: ${currentRegion}]: `,
+  );
 
   let regionChanged = false;
   if (regionInput) {
@@ -86,15 +137,21 @@ async function authLogin(): Promise<void> {
     regionChanged = true;
   }
 
-  if (Object.keys(creds).length === 0 && !regionChanged) {
-    console.log('Nothing entered — no changes.');
+  const saved = Object.keys(creds) as Array<keyof Credentials>;
+  if (saved.length === 0 && !regionChanged) {
+    console.log('\nNothing entered — no changes.');
     return;
   }
-  if (Object.keys(creds).length > 0) {
+  if (saved.length > 0) {
     setCredentials(creds);
+    console.log(`\n✓ Stored: ${saved.map((k) => CREDENTIAL_LABELS[k]).join(', ')}.`);
+  }
+  if (regionChanged) {
+    console.log('✓ Region updated.');
   }
   console.log(
-    '\n✓ Saved. (bitbucket-cloud auth is env-var only — see README — not part of this prompt.)',
+    `\nNext: snyk-autoimport import --snyk-org "<name>" --source ${source} ` +
+      '--source-org <org>',
   );
 }
 
@@ -102,6 +159,12 @@ function authStatus(): void {
   const config = loadConfig();
   const creds = config.credentials ?? {};
   console.log('Config file: ' + configFilePath());
+  if (usingLegacyConfig()) {
+    console.log(
+      '  ⚠ Still reading the previous location, ' + legacyConfigFilePath() + '.\n' +
+        '    Run `auth login` to store them at the path above, then delete the old file.',
+    );
+  }
   console.log('  Snyk token:              ' + (creds.snykToken ? 'set' : 'not set'));
   console.log('  GitHub token:            ' + (creds.githubToken ? 'set' : 'not set'));
   console.log('  GitLab token:            ' + (creds.gitlabToken ? 'set' : 'not set'));
