@@ -277,11 +277,8 @@ async function requireIntegrationConfigured(
 ): Promise<void> {
   process.stdout.write(`\nChecking ${source} is configured in Snyk...\n`);
   const rm = makeRequestManager('snyk-autoimport:auth');
-  const { configuredIn, orgsChecked, orgsTotal } = await findOrgsWithIntegration(
-    rm,
-    source,
-    orgs,
-  );
+  const { configuredIn, orgsChecked, orgsTotal, exhaustive } =
+    await findOrgsWithIntegration(rm, source, orgs);
 
   if (configuredIn.length > 0) {
     const names = configuredIn.map((o) => o.name).sort();
@@ -291,12 +288,23 @@ async function requireIntegrationConfigured(
     return;
   }
 
-  const scope =
-    orgsChecked < orgsTotal
-      ? `the first ${orgsChecked} of ${orgsTotal} organizations`
-      : `all ${orgsChecked} organization(s)`;
+  // Only a complete search proves absence. A capped one that found nothing is
+  // inconclusive, and blocking on it would lock out anyone whose organization
+  // sorted past the cap — so that case warns and continues, leaving the
+  // authoritative per-organization check to `import`.
+  if (!exhaustive) {
+    console.log(
+      `  ? not found in the ${orgsChecked} organization(s) checked, of ${orgsTotal} ` +
+        'visible — too many to check them all here.\n' +
+        '    If the import fails with "integration not configured", connect it in\n' +
+        '    Snyk (Settings → Integrations) for the organization you are importing to.',
+    );
+    return;
+  }
+
   throw new Error(
-    `No "${source}" integration is configured in ${scope} this token can see.\n\n` +
+    `No "${source}" integration is configured in any of the ${orgsChecked} ` +
+      'organization(s) this token can see.\n\n' +
       'This is set up in Snyk, not here:\n' +
       '  1. Open the target organization in https://app.snyk.io\n' +
       '  2. Settings → Integrations → connect the one you want\n' +

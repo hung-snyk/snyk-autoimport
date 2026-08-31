@@ -198,7 +198,11 @@ surfaces here rather than part-way through an import:
    action in the web UI, so if none is found the command stops and says so,
    rather than collecting a credential that cannot be used. The organizations
    that *do* have it are listed, which is also the answer to "where can I
-   import this from".
+   import this from". Tokens with more than 25 visible organizations are
+   checked only up to that limit, since this blocks the prompt; in that case a
+   nothing-found result is reported as inconclusive and does not stop the
+   command, because the organization you want may simply not have been among
+   those checked.
 3. **The source credential** — verified against the provider.
 
 The region is asked first because the Snyk token is verified against that

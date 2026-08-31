@@ -129,10 +129,14 @@ export async function verifyScmCredential(source: string): Promise<VerifyResult>
 /**
  * How many organizations to inspect when looking for an integration.
  *
- * A token can see a great many orgs, and this runs interactively — so it is
- * capped, and the caller is told when the answer is therefore partial rather
- * than being quietly given a "not configured" that only means "not found in
- * the first few".
+ * Measured cost: ~166 ms per organization with requests in flight together, so
+ * 25 lands around 4-8 seconds — acceptable for something blocking a prompt,
+ * where 200 organizations would be over 30 seconds.
+ *
+ * The cap makes a "found nothing" answer INCONCLUSIVE rather than negative,
+ * which callers must respect: `exhaustive` below is false when there were more
+ * organizations than were checked, and finding nothing in that case is not
+ * evidence that the integration is missing.
  */
 const MAX_ORGS_TO_CHECK = 25;
 
@@ -141,6 +145,13 @@ export interface IntegrationCheck {
   configuredIn: OrgSummary[];
   orgsChecked: number;
   orgsTotal: number;
+  /**
+   * True when every organization was checked. When false, an empty
+   * `configuredIn` means "not found in the ones we looked at" — NOT "not
+   * configured". Treating those the same would block a user whose
+   * organization simply sorted past the cap.
+   */
+  exhaustive: boolean;
 }
 
 /**
@@ -171,5 +182,10 @@ export async function findOrgsWithIntegration(
     }
   });
 
-  return { configuredIn, orgsChecked: toCheck.length, orgsTotal: orgs.length };
+  return {
+    configuredIn,
+    orgsChecked: toCheck.length,
+    orgsTotal: orgs.length,
+    exhaustive: toCheck.length === orgs.length,
+  };
 }
