@@ -225,6 +225,7 @@ means a real import against a live instance, not test coverage alone.
 | `gitlab` | `GITLAB_TOKEN` | Optional (defaults to gitlab.com) | Implemented and unit-tested; not exercised against a live instance |
 | `bitbucket-server` | `BITBUCKET_SERVER_TOKEN` | **Required** | Implemented and unit-tested; not exercised against a live instance |
 | `bitbucket-cloud` | See [below](#bitbucket-cloud-authentication) | Not required | Implemented and unit-tested; not exercised against a live instance |
+| `bitbucket-connect-app` | See [below](#bitbucket-cloud-authentication) | Not required | Deduplication verified live; discovery and import not yet verified |
 
 ### Provider-specific notes
 
@@ -241,6 +242,13 @@ means a real import against a live instance, not test coverage alone.
 - **`azure-repos`** — `--source-org` is the Azure DevOps organization.
   Repositories across every project in that organization are discovered
   automatically; you do not name projects individually.
+- **`bitbucket-cloud` vs `bitbucket-connect-app`** — Both are Bitbucket Cloud
+  and both take a workspace as `--source-org`; they differ only in how Snyk is
+  connected. `bitbucket-connect-app` is Snyk's Connect App integration and is
+  what a recently-connected Bitbucket Cloud organization will have; the older
+  `bitbucket-cloud` is the username/app-password integration. Run
+  `integrations` to see which one your organization has — passing the wrong one
+  fails with "integration not configured".
 - **`bitbucket-server`** — `--source-org` is the Bitbucket project **name**.
   Import targets carry no branch information, so the repository default branch
   is always used.
@@ -252,8 +260,10 @@ means a real import against a live instance, not test coverage alone.
 
 ### Bitbucket Cloud authentication
 
-Bitbucket Cloud supports three authentication methods, so it is configured
-through environment variables rather than `auth login`:
+Both Bitbucket Cloud sources (`bitbucket-cloud` and `bitbucket-connect-app`)
+use the same credentials for repository discovery. Bitbucket Cloud supports
+three authentication methods, so it is configured through environment variables
+rather than `auth login`:
 
 | Method | Environment variables |
 |---|---|
@@ -372,10 +382,11 @@ Snyk takes to scan every submitted repository. `CONCURRENT_IMPORTS` (default
 
 ## Known limitations
 
-- **Four providers are not verified against live instances** — `gitlab`,
-  `bitbucket-server`, `bitbucket-cloud`, and `github-enterprise`. They are
-  implemented and covered by the maintainers' tests, but have not been run
-  against a real server. See [Supported sources](#supported-sources).
+- **Several providers are not fully verified against live instances** —
+  `gitlab`, `bitbucket-server`, `bitbucket-cloud`, `bitbucket-connect-app`, and
+  `github-enterprise`. They are implemented and covered by the maintainers'
+  tests, but have not been exercised end to end against a real server. See
+  [Supported sources](#supported-sources) for the status of each.
 - **Repositories with no supported manifests** produce no Snyk project, so they
   are not recorded in the APIs used for deduplication and will be re-attempted
   on each run. This is harmless: re-importing an already-imported repository

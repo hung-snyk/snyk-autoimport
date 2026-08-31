@@ -16,4 +16,12 @@ export enum SnykProjectOrigin {
   BITBUCKET_SERVER = 'bitbucket-server',
   BITBUCKET_CLOUD = 'bitbucket-cloud',
   BITBUCKET_CLOUD_APP = 'bitbucket-cloud-app',
+  /**
+   * Bitbucket Cloud connected through Snyk's Connect App — the current way to
+   * link Bitbucket Cloud, and a different integration key from the legacy
+   * username/app-password `bitbucket-cloud`. Verified against a live org: both
+   * the integration key and the project origin are this same string, and its
+   * projects are named `owner/repo(branch):manifest` like the GitHub family.
+   */
+  BITBUCKET_CONNECT_APP = 'bitbucket-connect-app',
 }

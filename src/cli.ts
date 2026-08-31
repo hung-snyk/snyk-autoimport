@@ -7,7 +7,8 @@
  *   integrations  --snyk-org <name>
  *   import  --snyk-org <name> | --snyk-org-id <uuid>
  *           --source github|github-cloud-app|github-enterprise|gitlab|
- *                     azure-repos|bitbucket-server|bitbucket-cloud
+ *                     azure-repos|bitbucket-server|bitbucket-cloud|
+ *                     bitbucket-connect-app
  *           --source-org <org-or-group-or-project-or-workspace>
  *           [--source-url <self-hosted-host>]  [--dry-run]  [--yes]
  */
@@ -289,6 +290,8 @@ async function discoverForSource(
     case 'bitbucket-server':
       return discoverBitbucketServerTargets({ projectName: sourceOrg, orgId, integrationId, host: sourceUrl! });
     case 'bitbucket-cloud':
+    case 'bitbucket-connect-app':
+      // Same Bitbucket Cloud API either way; only the Snyk integration differs.
       return discoverBitbucketCloudTargets({ workspace: sourceOrg, orgId, integrationId });
     default:
       // Unreachable: importCmd validates args.source against SOURCES first.

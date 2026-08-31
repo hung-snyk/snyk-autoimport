@@ -66,6 +66,17 @@ export const SOURCES: Record<string, SourceDef> = {
     requiresSourceUrl: false, // fixed host: api.bitbucket.org
     token: { special: 'bitbucket-cloud' },
   },
+  /**
+   * Bitbucket Cloud via Snyk's Connect App. Discovery is identical to
+   * `bitbucket-cloud` — the same Bitbucket Cloud API, addressed the same way —
+   * because how Snyk connects to Bitbucket does not change how repos are
+   * listed. Only the Snyk-side integration key and project origin differ.
+   */
+  'bitbucket-connect-app': {
+    dedupType: SnykProjectOrigin.BITBUCKET_CONNECT_APP,
+    requiresSourceUrl: false,
+    token: { special: 'bitbucket-cloud' },
+  },
 };
 
 export const REQUIRES_SOURCE_URL = new Set(

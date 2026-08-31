@@ -118,7 +118,7 @@ function withoutBranchSuffix(segment: string): string {
   return segment.split('(')[0];
 }
 
-/** owner/repo — GitHub family, Azure Repos, Bitbucket Cloud. */
+/** owner/repo — GitHub family, Azure Repos, Bitbucket Cloud (incl. Connect App). */
 function ownerNameTarget(project: SnykProject): Target | undefined {
   const [owner, name] = repoPart(project.name).split('/');
   if (!owner || !name) return undefined;
@@ -153,6 +153,7 @@ const TARGET_FROM_PROJECT: Record<SnykProjectOrigin, (p: SnykProject) => Target 
   [SnykProjectOrigin.AZURE_REPOS]: ownerNameTarget,
   [SnykProjectOrigin.BITBUCKET_CLOUD]: ownerNameTarget,
   [SnykProjectOrigin.BITBUCKET_CLOUD_APP]: ownerNameTarget,
+  [SnykProjectOrigin.BITBUCKET_CONNECT_APP]: ownerNameTarget,
   [SnykProjectOrigin.BITBUCKET_SERVER]: bitbucketServerTarget,
   [SnykProjectOrigin.GITLAB]: gitlabTarget,
 };
