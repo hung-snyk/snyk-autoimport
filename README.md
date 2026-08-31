@@ -15,8 +15,8 @@ node dist/cli.js import --snyk-org "Acme Corp" --source github-cloud-app --sourc
 **Self-contained.** The tool talks directly to Snyk's documented
 [Import API](https://docs.snyk.io/developer-tools/snyk-api/reference/import-projects-v1)
 and to each SCM provider's public REST API. It has three runtime dependencies
-and no HTTP client or provider SDKs — repository discovery across all five
-providers uses the Node runtime's built-in `fetch`. Nothing here wraps another
+and no HTTP client or provider SDKs — repository discovery across every
+supported provider uses the Node runtime's built-in `fetch`. Nothing here wraps another
 CLI, so its behaviour is tied only to APIs Snyk and the providers publish and
 version.
 
@@ -164,7 +164,8 @@ Which source will you import from?
   [5] azure-repos
   [6] bitbucket-server  (needs --source-url)
   [7] bitbucket-cloud
-Pick one (1-7 or name): 4
+  [8] bitbucket-connect-app
+Pick one (1-8 or name): 4
 
 GitLab token: ***
 ```
@@ -174,8 +175,8 @@ rejected and re-prompted. Typed tokens are masked, and a prompt left blank keeps
 whatever is already stored, so you can re-run the command to change one value.
 Run it again to add a second source's token.
 
-Selecting `bitbucket-cloud` stores nothing, because its three authentication
-methods are read from environment variables — see
+Selecting either Bitbucket Cloud source stores nothing, because their three
+authentication methods are read from environment variables — see
 [Bitbucket Cloud authentication](#bitbucket-cloud-authentication).
 
 ### `integrations`
