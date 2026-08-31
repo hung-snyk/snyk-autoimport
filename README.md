@@ -102,13 +102,12 @@ Which source will you import from?
   [6] Bitbucket Server     --source bitbucket-server
   [7] Bitbucket Cloud      --source bitbucket-cloud
   [8] Bitbucket Cloud App  --source bitbucket-connect-app
-Pick one (1-8 or name): 7
+Pick one (1-8 or name): 2
 
-Bitbucket Cloud email or username: you@example.com
-Bitbucket Cloud API token or app password: ***
+GitHub token: ***
 
-Checking bitbucket-cloud credentials...
-  ✓ authenticated as Your Name
+Checking github-cloud-app credentials...
+  ✓ authenticated as your-github-username
 
 ✓ Stored 2 credential(s), chmod 600:
     /path/to/snyk-autoimport/.snyk-autoimport.json
