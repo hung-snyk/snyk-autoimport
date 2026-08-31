@@ -21,8 +21,8 @@ client or provider SDKs — discovery uses the Node runtime's built-in `fetch`.
 
 - [Requirements](#requirements)
 - [Installation](#installation)
-- [Quick start](#quick-start)
 - [Commands](#commands)
+- [Example](#example)
 - [Credentials and configuration](#credentials-and-configuration)
 - [Continuous integration](#continuous-integration)
 
@@ -50,35 +50,32 @@ Optionally expose it as a global command with `npm link` (`npm unlink -g
 snyk-autoimport` to remove). Examples below use `snyk-autoimport`; substitute
 `node dist/cli.js` if you did not link it.
 
-## Quick start
-
-```bash
-# One time, interactive: region, Snyk token, source and its credential
-snyk-autoimport auth login
-
-# Import every repo in a GitHub org into a Snyk org
-snyk-autoimport import \
-  --snyk-org "Acme Corp" \
-  --source github-cloud-app \
-  --source-org acme-corp
-```
-
-Re-running is safe: repositories already in Snyk are skipped, so a partially
-failed run can simply be repeated.
-
 ## Commands
-
-### `auth`
 
 | Command | Description |
 |---|---|
-| `auth login` | Asks for your region, Snyk token, source, and that source's credential. Requires an interactive terminal. |
+| `auth login` | Asks for your region, Snyk token, source, and that source's credential, checking each against a live API. Self-hosted sources are also asked for their server URL, which is stored. One source at a time — run it again to add another. Requires an interactive terminal. |
 | `auth status` | Shows the config path, which credentials are set, and the region. Token values are never printed. |
 | `auth logout` | Removes stored credentials. |
+| `integrations --snyk-org "<name>"` | Lists the SCM integrations configured on an organization, with the `--source` value for each. Use it when unsure which to pass — an organization can have several from the same family, and `github` and `github-cloud-app` behave differently. |
+| `import --snyk-org "<name>" --source <source> --source-org <org>` | Discovers repositories, skips those already imported, submits the rest, and prints a summary. |
 
-One source at a time, so you only paste the credential you need — run it again
-to add another. Both credentials are checked against a live API before it
-finishes, and self-hosted sources are asked for their server URL too.
+`import` flags:
+
+| Flag | Description |
+|---|---|
+| `--snyk-org` | Organization name or slug. An ambiguous name fails rather than resolving to an arbitrary match. |
+| `--snyk-org-id` | Organization UUID. Skips name resolution; recommended for automation. |
+| `--source` | **Required.** Never inferred, because one organization may have several integrations of the same family. |
+| `--source-org` | The organization, group, workspace or project to import from, depending on the provider. `--github-org` is an accepted alias. |
+| `--source-url` | Host for self-hosted providers. Only needed if `auth login` has not stored it. |
+| `--region` | Overrides the stored region. |
+| `--dry-run` | Show what would be imported and exit, changing nothing. |
+| `--yes` | Skip the confirmation prompt. Required for non-interactive use. |
+
+## Example
+
+Log in once, interactively:
 
 ```text
 $ snyk-autoimport auth login
@@ -114,33 +111,15 @@ Checking github-cloud-app credentials...
     Environment variables override this file, so CI never needs it.
 ```
 
-### `integrations`
-
-Lists the SCM integrations configured on an organization, with the `--source`
-value for each. Use it when unsure which to pass — an organization can have
-several from the same family, and `github` and `github-cloud-app` behave
-differently.
+Then import. Re-running is safe — repositories already in Snyk are skipped, so a
+partially failed run can simply be repeated.
 
 ```bash
-snyk-autoimport integrations --snyk-org "Acme Corp"
+snyk-autoimport import \
+  --snyk-org "Acme Corp" \
+  --source github-cloud-app \
+  --source-org acme-corp
 ```
-
-### `import`
-
-| Flag | Description |
-|---|---|
-| `--snyk-org` | Organization name or slug. An ambiguous name fails rather than resolving to an arbitrary match. |
-| `--snyk-org-id` | Organization UUID. Skips name resolution; recommended for automation. |
-| `--source` | **Required.** Never inferred, because one organization may have several integrations of the same family. |
-| `--source-org` | The organization, group, workspace or project to import from, depending on the provider. `--github-org` is an accepted alias. |
-| `--source-url` | Host for self-hosted providers. Only needed if `auth login` has not stored it. |
-| `--region` | Overrides the stored region. |
-| `--dry-run` | Show what would be imported and exit, changing nothing. |
-| `--yes` | Skip the confirmation prompt. Required for non-interactive use. |
-
-With `github-cloud-app`, a repository the Snyk GitHub App was not granted access
-to is discovered but fails with `404` at import — discovery uses your own token,
-which typically sees more than the App was granted.
 
 ## Credentials and configuration
 
