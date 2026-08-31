@@ -46,6 +46,7 @@ import {
   resolveIntegration,
   listIntegrationsMap,
   formatOrgMatch,
+  describeMissingIntegration,
   type OrgSummary,
 } from './snyk';
 import { assertValidOrgId } from './org-id';
@@ -60,11 +61,7 @@ import { SOURCES, REQUIRES_SOURCE_URL, KNOWN_UNSUPPORTED, GITHUB_CLOUD_APP_SOURC
 import { printSummary } from './report';
 import { describeTarget } from './target-format';
 import { ask, askSecret, confirm, isInteractive } from './prompt';
-import {
-  verifyScmCredential,
-  findOrgsWithIntegration,
-  type VerifyResult,
-} from './verify';
+import { verifyScmCredential, type VerifyResult } from './verify';
 import {
   getBitbucketCloudAuth,
   describeError,
@@ -265,55 +262,6 @@ async function promptBitbucketCloud(existing: Credentials): Promise<Credentials>
   return creds;
 }
 
-/**
- * Stop unless the chosen source's integration exists somewhere the token can
- * see. Connecting an integration is a Snyk-side action in the web UI, so this
- * fails with that instruction rather than letting the user discover it later
- * as an "integration not configured" error mid-import.
- */
-async function requireIntegrationConfigured(
-  source: string,
-  orgs: readonly OrgSummary[],
-): Promise<void> {
-  process.stdout.write(`\nChecking ${source} is configured in Snyk...\n`);
-  const rm = makeRequestManager('snyk-autoimport:auth');
-  const { configuredIn, orgsChecked, orgsTotal, exhaustive } =
-    await findOrgsWithIntegration(rm, source, orgs);
-
-  if (configuredIn.length > 0) {
-    const names = configuredIn.map((o) => o.name).sort();
-    const shown = names.slice(0, 5).join(', ');
-    const more = names.length > 5 ? `, +${names.length - 5} more` : '';
-    console.log(`  ✓ configured in ${names.length} organization(s): ${shown}${more}`);
-    return;
-  }
-
-  // Only a complete search proves absence. A capped one that found nothing is
-  // inconclusive, and blocking on it would lock out anyone whose organization
-  // sorted past the cap — so that case warns and continues, leaving the
-  // authoritative per-organization check to `import`.
-  if (!exhaustive) {
-    console.log(
-      `  ? not found in the ${orgsChecked} organization(s) checked, of ${orgsTotal} ` +
-        'visible — too many to check them all here.\n' +
-        '    If the import fails with "integration not configured", connect it in\n' +
-        '    Snyk (Settings → Integrations) for the organization you are importing to.',
-    );
-    return;
-  }
-
-  throw new Error(
-    `No "${source}" integration is configured in any of the ${orgsChecked} ` +
-      'organization(s) this token can see.\n\n' +
-      'This is set up in Snyk, not here:\n' +
-      '  1. Open the target organization in https://app.snyk.io\n' +
-      '  2. Settings → Integrations → connect the one you want\n' +
-      `  3. Re-run \`auth login\` and pick ${source} again\n\n` +
-      'Nothing was saved. Run `snyk-autoimport integrations --snyk-org "<name>"` ' +
-      'to see what a given organization does have.',
-  );
-}
-
 /** Print the outcome of a credential check as one indented status line. */
 function printVerifyResult(result: VerifyResult): void {
   if (result.status === 'ok') console.log(`  ✓ ${result.detail}`);
@@ -338,16 +286,19 @@ async function authLogin(): Promise<void> {
   // 2. Snyk token, verified before going any further.
   console.log('');
   const creds: Credentials = {};
-  const { token: snykToken, orgs } = await promptAndVerifySnykToken(existing);
+  const { token: snykToken } = await promptAndVerifySnykToken(existing);
   if (snykToken) creds.snykToken = snykToken;
 
-  // 3. Which source. Checked against Snyk before asking for its credential —
-  //    no point collecting a secret for an integration that cannot be used,
-  //    and this is a Snyk-side setup step the user has to do in the UI.
+  // 3. Which source.
+  //    Deliberately NOT checked against Snyk here: integrations are
+  //    per-organization and login never asks for one, so any check would
+  //    either need a prompt it does not have or a scan of every visible
+  //    organization — which is slow, and can only ever return an inconclusive
+  //    answer once capped. `import` knows the target organization and checks
+  //    it exactly; that is where a missing integration should fail.
   const source = await promptForSource();
-  await requireIntegrationConfigured(source, orgs);
 
-  // 4. That source's credential(s), also verified.
+  // 4. That source's credential(s), verified.
   if (usesBitbucketCloudAuth(source)) {
     Object.assign(creds, await promptBitbucketCloud(existing));
   } else {
@@ -594,12 +545,14 @@ async function importCmd(args: ImportArgs): Promise<void> {
     args.source,
   );
   if (!integrationId) {
-    const configured = Object.keys(available);
-    throw new Error(
-      `Org ${org.id} has no "${args.source}" integration.\n` +
-        `Configured integrations: ${configured.length ? configured.join(', ') : '(none)'}.\n` +
-        `Set --source to one of those (e.g. --source github-cloud-app), or configure it in Snyk.`,
-    );
+    // Two different problems with two different fixes: an org with other
+    // integrations usually means the wrong --source was passed, while an org
+    // with none needs a setup step in Snyk that this tool cannot perform.
+    // Only suggest sources this tool can actually import through: an org's
+    // integration list also holds cli, kubernetes, docker-hub and the like.
+    const usable = Object.keys(available).filter((name) => SOURCES[name]);
+    const label = org.name === org.id ? org.id : `"${org.name}"`;
+    throw new Error(describeMissingIntegration(label, args.source, usable));
   }
   console.log(`✓ Using ${args.source} integration ${integrationId}`);
 

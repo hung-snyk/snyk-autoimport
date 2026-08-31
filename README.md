@@ -175,9 +175,6 @@ Which source will you import from?
   [8] bitbucket-connect-app
 Pick one (1-8 or name): 4
 
-Checking gitlab is configured in Snyk...
-  ✓ configured in 4 organization(s): Acme Corp, Acme Labs, demo, sandbox
-
 GitLab token: ***
 
 Checking gitlab credentials...
@@ -189,21 +186,16 @@ Checking gitlab credentials...
     Environment variables override this file, so CI never needs it.
 ```
 
-Three checks run against live APIs before the command finishes, so a problem
-surfaces here rather than part-way through an import:
+Both credentials are checked against a live API before the command finishes,
+so a mistyped or expired one surfaces here rather than part-way through an
+import: the **Snyk token** against the chosen region, and the **source
+credential** against the provider.
 
-1. **The Snyk token** — verified against the chosen region.
-2. **The integration** — the selected source must be configured on at least one
-   organization the token can see. Connecting an integration is a Snyk-side
-   action in the web UI, so if none is found the command stops and says so,
-   rather than collecting a credential that cannot be used. The organizations
-   that *do* have it are listed, which is also the answer to "where can I
-   import this from". Tokens with more than 25 visible organizations are
-   checked only up to that limit, since this blocks the prompt; in that case a
-   nothing-found result is reported as inconclusive and does not stop the
-   command, because the organization you want may simply not have been among
-   those checked.
-3. **The source credential** — verified against the provider.
+Whether the *integration* exists is deliberately not checked here. Integrations
+belong to an organization, and `auth login` stores credentials rather than
+targeting one — so the check happens at import time, against the organization
+you actually name, and fails there with the specific fix. See
+[`import`](#import) below.
 
 The region is asked first because the Snyk token is verified against that
 region's API — a token valid in SNYK-EU-01 returns `401` against the US host,
@@ -244,6 +236,13 @@ node dist/cli.js integrations --snyk-org "Acme Corp"
 
 Discovers repositories in the specified source organization, removes those
 already imported, submits the remainder, and prints a summary.
+
+The `--source` you pass must be configured on the target organization. If it is
+not, the command stops before discovering anything and distinguishes the two
+causes: an organization with other SCM integrations lists them and suggests one
+(usually the wrong `--source` was passed), while an organization with none is
+pointed at the Snyk UI, since connecting an integration is a Snyk-side action.
+`integrations` shows what any organization has.
 
 | Flag | Description |
 |---|---|

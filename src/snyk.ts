@@ -88,6 +88,42 @@ export async function listIntegrationsMap(
 }
 
 /**
+ * Explain a missing integration, for the org the user actually named.
+ *
+ * Two different problems with two different fixes, so they get two different
+ * messages: an org with other SCM integrations usually means the wrong
+ * `--source` was passed, while an org with none needs a setup step in Snyk
+ * that this tool cannot perform.
+ *
+ * `usableSources` is passed in rather than derived here so this stays free of
+ * a dependency on the source registry — an org's integration list also
+ * contains things this tool cannot import through (cli, kubernetes, docker-hub),
+ * and suggesting those would be worse than saying nothing.
+ */
+export function describeMissingIntegration(
+  orgLabel: string,
+  source: string,
+  usableSources: readonly string[],
+): string {
+  if (usableSources.length > 0) {
+    return (
+      `Org ${orgLabel} has no "${source}" integration configured.\n\n` +
+      `It does have: ${usableSources.join(', ')}.\n` +
+      `Re-run with one of those, e.g. --source ${usableSources[0]}.`
+    );
+  }
+  return (
+    `Org ${orgLabel} has no SCM integration configured at all, so there is ` +
+    'nothing to import through.\n\n' +
+    'This is set up in Snyk, not here:\n' +
+    '  1. Open the organization in https://app.snyk.io\n' +
+    '  2. Settings → Integrations → connect your SCM\n' +
+    '  3. Re-run this command\n\n' +
+    'Run `snyk-autoimport integrations --snyk-org "<name>"` to check another org.'
+  );
+}
+
+/**
  * Find the integration id for a given source type on an org, e.g. "github"
  * or "github-cloud-app". Returns the id plus the full map (so callers can
  * show what *is* configured when the requested type is missing).
