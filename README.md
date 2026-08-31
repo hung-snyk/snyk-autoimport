@@ -238,11 +238,11 @@ Discovers repositories in the specified source organization, removes those
 already imported, submits the remainder, and prints a summary.
 
 The `--source` you pass must be configured on the target organization. If it is
-not, the command stops before discovering anything and tells you to connect it
-in Snyk, naming the integration as the Snyk UI names it. It deliberately does
-not offer to import from one of the organization's other integrations instead —
-that would risk importing the wrong repositories into the wrong place. Use
-`integrations` to see what an organization has.
+not, the command stops before discovering anything and tells you to configure
+it in Snyk, naming the integration as the Snyk UI names it. It deliberately
+does not offer to import from one of the organization's other integrations
+instead — that would risk importing the wrong repositories into the wrong
+place. Use [`integrations`](#integrations) to see what an organization has.
 
 | Flag | Description |
 |---|---|

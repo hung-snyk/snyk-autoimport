@@ -105,13 +105,8 @@ export function describeMissingIntegration(
   sourceLabel: string,
 ): string {
   return (
-    `Org ${orgLabel} has no "${source}" integration configured.\n\n` +
-    'Configure it in Snyk first, then try again:\n' +
-    '  1. Open the organization in https://app.snyk.io\n' +
-    `  2. Settings → Integrations → connect ${sourceLabel}\n` +
-    '  3. Re-run this command\n\n' +
-    'Run `snyk-autoimport integrations --snyk-org "<name>"` to see what an ' +
-    'organization currently has.'
+    `Org ${orgLabel} has no "${source}" (${sourceLabel}) integration configured.\n` +
+    'Configure it in Snyk for this organization, then try again.'
   );
 }
 
