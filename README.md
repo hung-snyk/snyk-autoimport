@@ -30,8 +30,6 @@ client or provider SDKs — discovery uses the Node runtime's built-in `fetch`.
 - [What an import looks like](#what-an-import-looks-like)
 - [Credentials and configuration](#credentials-and-configuration)
 - [Continuous integration](#continuous-integration)
-- [How it works](#how-it-works)
-- [Known limitations](#known-limitations)
 - [License](#license)
 
 ## Requirements
@@ -231,38 +229,6 @@ SNYK_TOKEN="$SNYK_TOKEN" GITHUB_TOKEN="$GITHUB_TOKEN" \
 Deduplication runs against live Snyk state every time, so this is safe to run on
 a schedule to pick up new repositories. Budget wall-clock time rather than a
 fixed timeout: the run lasts as long as Snyk takes to scan everything submitted.
-
-## How it works
-
-1. **Resolve the organization.** A name or slug is resolved against the
-   organizations your token can see; an ambiguous name fails rather than
-   resolving arbitrarily, because Snyk organization names are not unique.
-2. **Resolve the integration** from `--source`.
-3. **Discover repositories** via the provider's API. Archived repositories, and
-   those with no default branch, are excluded.
-4. **Deduplicate** against the projects already in Snyk — live state every time,
-   never a cached list.
-5. **Import and report.** The first repository goes alone as a canary, then the
-   rest; each job is polled to completion and summarized, with guidance for
-   common `401` and `404` failures.
-
-## Known limitations
-
-- **Not every source is verified against a live instance.** Verified end to end:
-  `github`, `github-cloud-app`, `azure-repos`. Discovery and deduplication
-  verified, import not yet: both Bitbucket Cloud sources. Implemented and
-  unit-tested only, never run against a real server: `gitlab`,
-  `bitbucket-server`, `github-enterprise`.
-- **Repositories with no supported manifests** produce no Snyk project, so they
-  are invisible to the APIs used for deduplication and are re-attempted on each
-  run. Harmless: re-importing an already-imported repository does not duplicate
-  it, because Snyk deduplicates server-side.
-- **A separate SCM credential is always required** — Snyk's API does not return
-  the one stored on an integration.
-- **Imports are polled inline** with no overall timeout, and there is no command
-  to check or resume a previously started import.
-- **Forked repositories are included**, with no option to exclude them.
-- **Not distributed** through npm or as a binary.
 
 ## License
 
