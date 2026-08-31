@@ -32,7 +32,11 @@ export interface Credentials {
   githubToken?: string;
   gitlabToken?: string;
   azureToken?: string;
+  /** Bitbucket Server HTTP access token, used as Bearer. */
   bitbucketServerToken?: string;
+  /** Bitbucket Server username + password, used as HTTP Basic. */
+  bitbucketServerUsername?: string;
+  bitbucketServerPassword?: string;
   bitbucketCloudUsername?: string;
   bitbucketCloudPassword?: string;
 }
@@ -44,6 +48,8 @@ export const CREDENTIAL_ENV_VARS: Record<keyof Credentials, string> = {
   gitlabToken: 'GITLAB_TOKEN',
   azureToken: 'AZURE_TOKEN',
   bitbucketServerToken: 'BITBUCKET_SERVER_TOKEN',
+  bitbucketServerUsername: 'BITBUCKET_SERVER_USERNAME',
+  bitbucketServerPassword: 'BITBUCKET_SERVER_PASSWORD',
   bitbucketCloudUsername: 'BITBUCKET_CLOUD_USERNAME',
   bitbucketCloudPassword: 'BITBUCKET_CLOUD_PASSWORD',
 };
@@ -54,7 +60,9 @@ export const CREDENTIAL_LABELS: Record<keyof Credentials, string> = {
   githubToken: 'GitHub token',
   gitlabToken: 'GitLab token',
   azureToken: 'Azure DevOps token',
-  bitbucketServerToken: 'Bitbucket Server token',
+  bitbucketServerToken: 'Bitbucket Server HTTP access token',
+  bitbucketServerUsername: 'Bitbucket Server username',
+  bitbucketServerPassword: 'Bitbucket Server password',
   bitbucketCloudUsername: 'Bitbucket Cloud email or username',
   bitbucketCloudPassword: 'Bitbucket Cloud API token or app password',
 };
@@ -73,6 +81,13 @@ export function credentialKeyForEnvVar(
 export interface StoredConfig {
   credentials?: Credentials;
   defaults?: {
+    /**
+     * Host per source, for the self-hosted ones. A customer's Bitbucket Server
+     * or GitHub Enterprise URL never changes, so making it a required flag on
+     * every import was friction for no safety benefit — a wrong host fails
+     * loudly at discovery either way.
+     */
+    sourceUrls?: Record<string, string>;
     /**
      * Held as a plain string, not a Region: a file written by an older version
      * can contain a name that is no longer valid, so readers validate it.
@@ -171,4 +186,17 @@ export function setRegion(region: Region): void {
   const config = loadConfig();
   config.defaults = { ...config.defaults, region };
   saveConfig(config);
+}
+
+export function setSourceUrl(source: string, url: string): void {
+  const config = loadConfig();
+  config.defaults = {
+    ...config.defaults,
+    sourceUrls: { ...config.defaults?.sourceUrls, [source]: url },
+  };
+  saveConfig(config);
+}
+
+export function storedSourceUrl(source: string): string | undefined {
+  return loadConfig().defaults?.sourceUrls?.[source];
 }

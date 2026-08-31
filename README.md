@@ -250,7 +250,7 @@ place. Use [`integrations`](#integrations) to see what an organization has.
 | `--snyk-org-id` | Snyk organization UUID. Skips name resolution; recommended for automation. |
 | `--source` | **Required.** SCM source type — see [Supported sources](#supported-sources). Never inferred, because one organization may have several integrations of the same family configured. |
 | `--source-org` | The organization, group, project, or workspace to import from. `--github-org` is accepted as an alias. |
-| `--source-url` | Host URL for self-hosted providers. Required for `github-enterprise` and `bitbucket-server`; optional override for other providers. |
+| `--source-url` | Host URL for self-hosted providers. Required for `github-enterprise`, and for `bitbucket-server` unless its URL was stored by `auth login`; optional override elsewhere. |
 | `--region` | Snyk region — see [Regions](#regions). Overrides the stored region. |
 | `--dry-run` | Show the repositories that would be imported and exit without making changes. |
 | `--yes` | Skip the confirmation prompt. Required for non-interactive use. |
@@ -271,7 +271,7 @@ since the two differ for the App integrations.
 | `azure-repos` | Azure Repos | `AZURE_TOKEN` | Optional (defaults to dev.azure.com) | Verified end to end |
 | `github-enterprise` | GitHub Enterprise | `GITHUB_TOKEN` | **Required** | Implemented and unit-tested; not exercised against a live instance |
 | `gitlab` | GitLab | `GITLAB_TOKEN` | Optional (defaults to gitlab.com) | Implemented and unit-tested; not exercised against a live instance |
-| `bitbucket-server` | Bitbucket Server | `BITBUCKET_SERVER_TOKEN` | **Required** | Implemented and unit-tested; not exercised against a live instance |
+| `bitbucket-server` | Bitbucket Server | See [below](#bitbucket-server-authentication) | **Required** (storable) | Implemented and unit-tested; not exercised against a live instance |
 | `bitbucket-cloud` | Bitbucket Cloud | See [below](#bitbucket-cloud-authentication) | Not required | Discovery and deduplication verified live; import not yet verified |
 | `bitbucket-connect-app` | Bitbucket Cloud App | See [below](#bitbucket-cloud-authentication) | Not required | Deduplication verified live; discovery shares the verified `bitbucket-cloud` path; import not yet verified |
 
@@ -299,7 +299,9 @@ since the two differ for the App integrations.
   fails with "integration not configured".
 - **`bitbucket-server`** — `--source-org` is the Bitbucket project **name**.
   Import targets carry no branch information, so the repository default branch
-  is always used.
+  is always used. Its URL and credentials are all storable through
+  `auth login` — see
+  [Bitbucket Server authentication](#bitbucket-server-authentication).
 - **`github-server-app`** — Not supported. This integration's project origin has
   no verified deduplication mapping, so enabling it could silently skip or
   duplicate repositories. The CLI rejects it explicitly.
@@ -334,6 +336,24 @@ since they are short-lived or narrowly scoped and not worth persisting:
 Methods resolve in the order Basic → access token → OAuth. Set
 `BITBUCKET_CLOUD_AUTH_METHOD` to `user`, `api`, or `oauth` to force one when
 more than one is configured.
+
+### Bitbucket Server authentication
+
+Bitbucket Server (Data Center) is self-hosted, so it needs a URL as well as a
+credential. `auth login` stores all of it, after which `--source-url` is
+optional — pass it only to override the stored host for one run.
+
+| Value | Environment variable |
+|---|---|
+| Server URL | stored by `auth login`; `--source-url` overrides it |
+| Username | `BITBUCKET_SERVER_USERNAME` |
+| Password | `BITBUCKET_SERVER_PASSWORD` |
+| HTTP access token (instead of the two above) | `BITBUCKET_SERVER_TOKEN` |
+
+Either authenticate with a username and password over HTTP Basic, or with an
+HTTP access token as Bearer. Setting a username selects Basic, so a username
+with no password is an error rather than a silent fall back to the token — the
+fallback would authenticate as a different identity than intended.
 
 ## Regions
 

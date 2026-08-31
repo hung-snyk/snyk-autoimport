@@ -12,7 +12,9 @@
  * nothing about whether discovery will work.
  */
 import { getBitbucketCloudAuth } from './scm/bitbucket-cloud';
+import { bitbucketServerAuthHeader } from './scm/bitbucket-server';
 import { basicAuth, scmGet, ScmError } from './scm/http';
+import { storedSourceUrl } from './config';
 
 export type VerifyResult =
   | { status: 'ok'; detail: string }
@@ -23,8 +25,6 @@ export type VerifyResult =
 const UNVERIFIABLE: Record<string, string> = {
   'github-enterprise':
     'verifying needs your GitHub Enterprise host, which is supplied at import time via --source-url',
-  'bitbucket-server':
-    'verifying needs your Bitbucket Server host, which is supplied at import time via --source-url',
   'azure-repos':
     'an Azure PAT scoped to Code only is rejected by account-level endpoints, so a check here would prove nothing',
 };
@@ -101,6 +101,35 @@ async function verifyBitbucketCloud(): Promise<VerifyResult> {
   }
 }
 
+/**
+ * Lists projects, which is the permission discovery needs, against the host
+ * stored during login. Unlike the cloud providers there is no fixed endpoint
+ * to fall back on, so without a stored host this is skipped rather than
+ * guessed at.
+ */
+async function verifyBitbucketServer(): Promise<VerifyResult> {
+  const host = storedSourceUrl('bitbucket-server');
+  if (!host) {
+    return {
+      status: 'skipped',
+      reason: 'no Bitbucket Server URL is stored yet — re-run `auth login` to add one',
+    };
+  }
+  const { body } = await scmGet<{ size?: number }>(
+    `${host.replace(/\/$/, '')}/rest/api/1.0/projects?limit=1`,
+    bitbucketServerAuthHeader(),
+    'Bitbucket Server credential check',
+    { maxAttempts: 2 },
+  );
+  return {
+    status: 'ok',
+    detail:
+      typeof body.size === 'number'
+        ? `accepted (${body.size} project(s) visible)`
+        : 'accepted',
+  };
+}
+
 export async function verifyScmCredential(source: string): Promise<VerifyResult> {
   const skip = UNVERIFIABLE[source];
   if (skip) return { status: 'skipped', reason: skip };
@@ -115,6 +144,8 @@ export async function verifyScmCredential(source: string): Promise<VerifyResult>
       case 'bitbucket-cloud':
       case 'bitbucket-connect-app':
         return await verifyBitbucketCloud();
+      case 'bitbucket-server':
+        return await verifyBitbucketServer();
       default:
         return { status: 'skipped', reason: 'no check implemented for this source' };
     }

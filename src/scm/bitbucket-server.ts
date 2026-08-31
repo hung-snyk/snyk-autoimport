@@ -8,7 +8,7 @@
  * project *key*; they are different strings ("My Project" vs "MYPROJ"), which
  * is why the key is read back off each repo rather than assumed.
  */
-import { requireEnv, scmGet } from './http';
+import { basicAuth, requireEnv, scmGet } from './http';
 import type { BitbucketServerRepoData } from './types';
 
 const PAGE_LIMIT = 100;
@@ -25,6 +25,22 @@ interface BitbucketServerPage {
   nextPageStart?: number;
 }
 
+/**
+ * Bitbucket Server accepts either an HTTP access token as Bearer, or a
+ * username and password over Basic. Basic wins when a username is present,
+ * since setting one is an explicit choice; the token path stays the default so
+ * existing setups keep working.
+ */
+export function bitbucketServerAuthHeader(): Record<string, string> {
+  const username = process.env.BITBUCKET_SERVER_USERNAME?.trim();
+  if (username) {
+    const password = requireEnv('BITBUCKET_SERVER_PASSWORD', 'Bitbucket Server');
+    return { authorization: basicAuth(username, password) };
+  }
+  const token = requireEnv('BITBUCKET_SERVER_TOKEN', 'Bitbucket Server');
+  return { authorization: `Bearer ${token}` };
+}
+
 export async function listBitbucketServerRepos(
   projectName: string,
   host: string,
@@ -34,7 +50,7 @@ export async function listBitbucketServerRepos(
       'Bitbucket Server needs --source-url — there is no default host for a self-hosted server.',
     );
   }
-  const token = requireEnv('BITBUCKET_SERVER_TOKEN', 'Bitbucket Server');
+  const headers = bitbucketServerAuthHeader();
   const baseUrl = host.replace(/\/$/, '');
   const repos: BitbucketServerRepoData[] = [];
   let start = 0;
@@ -49,7 +65,7 @@ export async function listBitbucketServerRepos(
 
     const { body } = await scmGet<BitbucketServerPage>(
       `${baseUrl}/rest/api/1.0/repos?${query}`,
-      { authorization: `Bearer ${token}` },
+      headers,
       `Bitbucket Server repos for "${projectName}"`,
     );
 

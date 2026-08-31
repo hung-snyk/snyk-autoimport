@@ -21,6 +21,8 @@ import {
   clearCredentials,
   loadConfig,
   setRegion,
+  setSourceUrl,
+  storedSourceUrl,
   credentialKeyForEnvVar,
   legacyConfigFilePath,
   usingLegacyConfig,
@@ -109,6 +111,50 @@ function credentialForSource(source: string): keyof Credentials | undefined {
 function usesBitbucketCloudAuth(source: string): boolean {
   const token = SOURCES[source].token;
   return 'special' in token && token.special === 'bitbucket-cloud';
+}
+
+function usesBitbucketServerAuth(source: string): boolean {
+  const token = SOURCES[source].token;
+  return 'special' in token && token.special === 'bitbucket-server';
+}
+
+/**
+ * Bitbucket Server takes a host plus either a username and password, or an
+ * HTTP access token. The host is stored because a self-hosted URL never
+ * changes, and requiring --source-url on every import was friction.
+ */
+async function promptBitbucketServer(existing: Credentials): Promise<Credentials> {
+  const creds: Credentials = {};
+
+  const current = storedSourceUrl('bitbucket-server');
+  const url = await ask(
+    `\nBitbucket Server URL${current ? ` [current: ${current}]` : ' (e.g. https://bitbucket.example.com)'}: `,
+  );
+  if (url) setSourceUrl('bitbucket-server', url.trim());
+  if (!url && !current) {
+    throw new Error(
+      'Bitbucket Server needs its URL — there is no default host for a self-hosted server.',
+    );
+  }
+
+  console.log(
+    '\nAuthenticate with a username and password, or leave the username blank\n' +
+      'to use an HTTP access token instead.',
+  );
+  const userSuffix = existing.bitbucketServerUsername
+    ? ` [current: ${existing.bitbucketServerUsername}]`
+    : '';
+  const username = await ask(`${CREDENTIAL_LABELS.bitbucketServerUsername}${userSuffix}: `);
+  if (username) creds.bitbucketServerUsername = username;
+
+  if (username || existing.bitbucketServerUsername) {
+    const password = await askSecret(secretPrompt('bitbucketServerPassword', existing));
+    if (password) creds.bitbucketServerPassword = password;
+  } else {
+    const token = await askSecret(secretPrompt('bitbucketServerToken', existing));
+    if (token) creds.bitbucketServerToken = token;
+  }
+  return creds;
 }
 
 /** Require one of the supported sources, re-prompting until a valid pick. */
@@ -307,6 +353,8 @@ async function authLogin(): Promise<void> {
   // 4. That source's credential(s), verified.
   if (usesBitbucketCloudAuth(source)) {
     Object.assign(creds, await promptBitbucketCloud(existing));
+  } else if (usesBitbucketServerAuth(source)) {
+    Object.assign(creds, await promptBitbucketServer(existing));
   } else {
     const key = credentialForSource(source);
     if (key) {
@@ -532,9 +580,13 @@ async function importCmd(args: ImportArgs): Promise<void> {
   if (!args.sourceOrg) {
     throw new Error('Provide --source-org <org-or-group-or-project-or-workspace>.');
   }
-  if (REQUIRES_SOURCE_URL.has(args.source) && !args.sourceUrl) {
+  // A host stored by `auth login` stands in for the flag, since a self-hosted
+  // URL never changes. The flag still wins, so a one-off run can override it.
+  const sourceUrl = args.sourceUrl ?? storedSourceUrl(args.source);
+  if (REQUIRES_SOURCE_URL.has(args.source) && !sourceUrl) {
     throw new Error(
-      `--source-url is required for --source ${args.source} (e.g. https://ghe.example.com). ` +
+      `--source-url is required for --source ${args.source} (e.g. https://ghe.example.com), ` +
+        'or store it once with `auth login`.\n' +
         'Without it, discovery would either fail outright or silently query the wrong public host.',
     );
   }
@@ -567,7 +619,7 @@ async function importCmd(args: ImportArgs): Promise<void> {
     args.sourceOrg,
     org.id,
     integrationId,
-    args.sourceUrl,
+    sourceUrl,
   );
   console.log(`✓ Found ${candidates.length} repo(s)`);
 

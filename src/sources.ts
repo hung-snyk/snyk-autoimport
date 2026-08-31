@@ -22,7 +22,9 @@ export const GITHUB_CLOUD_APP_SOURCE = 'github-cloud-app';
 
 /** Single-env-var credential requirement. Bitbucket Cloud has its own
  * multi-method check (see cli.ts) since it isn't a single fixed var. */
-export type TokenRequirement = { envVar: string } | { special: 'bitbucket-cloud' };
+export type TokenRequirement =
+  | { envVar: string }
+  | { special: 'bitbucket-cloud' | 'bitbucket-server' };
 
 export interface SourceDef {
   /**
@@ -73,7 +75,8 @@ export const SOURCES: Record<string, SourceDef> = {
     label: 'Bitbucket Server',
     dedupType: SnykProjectOrigin.BITBUCKET_SERVER,
     requiresSourceUrl: true, // no public default host exists for self-hosted Bitbucket Server
-    token: { envVar: 'BITBUCKET_SERVER_TOKEN' },
+    // Multi-field: an HTTP access token, or a username and password.
+    token: { special: 'bitbucket-server' },
   },
   'bitbucket-cloud': {
     label: 'Bitbucket Cloud',
