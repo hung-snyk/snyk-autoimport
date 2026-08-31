@@ -114,12 +114,30 @@ Checking github-cloud-app credentials...
 Then import. Re-running is safe — repositories already in Snyk are skipped, so a
 partially failed run can simply be repeated.
 
-```bash
-snyk-autoimport import \
-  --snyk-org "Acme Corp" \
-  --source github-cloud-app \
-  --source-org acme-corp
+```text
+$ snyk-autoimport import --snyk-org "Acme Corp" --source github-cloud-app --source-org acme-corp
+
+✓ Resolved "Acme Corp" → d2f6e6d5-a481-4d4f-977d-349d689207cf (group: Acme Ltd)
+✓ Using github-cloud-app integration 0686349f-4442-415e-ae17-88713c79d964
+Discovering repos in acme-corp...
+✓ Found 24 repo(s)
+✓ 21 already imported — 3 new to import
+Import 3 repo(s) into Acme Corp? (Y/n)
+
+Importing... Snyk clones each repo and scans it for manifests, which usually takes a few minutes.
+  … still scanning (15s) — 0/3 repos done
+  … still scanning (30s) — 1/3 repos done
+  … still scanning (1m 15s) — 2/3 repos done
+
+Done.
+  11 project(s) created
+
+Re-run the same command any time — already-imported repos are skipped automatically.
 ```
+
+Projects are what Snyk creates, one per manifest found — so one repository
+routinely produces several, and a repository with no supported manifests
+produces none.
 
 ## Credentials and configuration
 
