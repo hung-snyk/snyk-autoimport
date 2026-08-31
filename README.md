@@ -167,10 +167,10 @@ Snyk API token: ***
 Which source will you import from?
   [1] GitHub               --source github
   [2] GitHub Cloud App     --source github-cloud-app
-  [3] GitHub Enterprise    --source github-enterprise  (needs --source-url)
+  [3] GitHub Enterprise    --source github-enterprise
   [4] GitLab               --source gitlab
   [5] Azure Repos          --source azure-repos
-  [6] Bitbucket Server     --source bitbucket-server  (needs --source-url)
+  [6] Bitbucket Server     --source bitbucket-server
   [7] Bitbucket Cloud      --source bitbucket-cloud
   [8] Bitbucket Cloud App  --source bitbucket-connect-app
 Pick one (1-8 or name): 4
@@ -250,7 +250,7 @@ place. Use [`integrations`](#integrations) to see what an organization has.
 | `--snyk-org-id` | Snyk organization UUID. Skips name resolution; recommended for automation. |
 | `--source` | **Required.** SCM source type — see [Supported sources](#supported-sources). Never inferred, because one organization may have several integrations of the same family configured. |
 | `--source-org` | The organization, group, project, or workspace to import from. `--github-org` is accepted as an alias. |
-| `--source-url` | Host URL for self-hosted providers. Required for `github-enterprise`, and for `bitbucket-server` unless its URL was stored by `auth login`; optional override elsewhere. |
+| `--source-url` | Host URL for self-hosted providers. Needed for `github-enterprise` and `bitbucket-server` unless `auth login` already stored it; optional override elsewhere. |
 | `--region` | Snyk region — see [Regions](#regions). Overrides the stored region. |
 | `--dry-run` | Show the repositories that would be imported and exit without making changes. |
 | `--yes` | Skip the confirmation prompt. Required for non-interactive use. |
@@ -269,7 +269,7 @@ since the two differ for the App integrations.
 | `github-cloud-app` | GitHub Cloud App | `GITHUB_TOKEN` | Not required | Verified end to end |
 | `github` | GitHub | `GITHUB_TOKEN` | Not required | Verified end to end |
 | `azure-repos` | Azure Repos | `AZURE_TOKEN` | Optional (defaults to dev.azure.com) | Verified end to end |
-| `github-enterprise` | GitHub Enterprise | `GITHUB_TOKEN` | **Required** | Implemented and unit-tested; not exercised against a live instance |
+| `github-enterprise` | GitHub Enterprise | `GITHUB_TOKEN` | **Required** (storable) | Implemented and unit-tested; not exercised against a live instance |
 | `gitlab` | GitLab | `GITLAB_TOKEN` | Optional (defaults to gitlab.com) | Implemented and unit-tested; not exercised against a live instance |
 | `bitbucket-server` | Bitbucket Server | See [below](#bitbucket-server-authentication) | **Required** (storable) | Implemented and unit-tested; not exercised against a live instance |
 | `bitbucket-cloud` | Bitbucket Cloud | See [below](#bitbucket-cloud-authentication) | Not required | Discovery and deduplication verified live; import not yet verified |
@@ -285,6 +285,10 @@ since the two differ for the App integrations.
 - **`github` and `github-enterprise`** — Require a **personal** Snyk API token.
   These integrations authenticate through a personal GitHub OAuth link, so a
   service account token returns `401` when starting an import.
+- **`github-enterprise`** — Self-hosted, so it needs your server's URL as well
+  as a PAT. `auth login` asks for both and stores the URL, after which
+  `--source-url` is only needed to override it for one run. The API is addressed
+  at `/api/v3` on your host.
 - **`gitlab`** — `--source-org` is a GitLab group name, and may be a nested path
   such as `group/subgroup`.
 - **`azure-repos`** — `--source-org` is the Azure DevOps organization.
@@ -340,8 +344,9 @@ more than one is configured.
 ### Bitbucket Server authentication
 
 Bitbucket Server (Data Center) is self-hosted, so it needs a URL as well as a
-credential. `auth login` stores all of it, after which `--source-url` is
-optional — pass it only to override the stored host for one run.
+credential. `auth login` asks for both and stores the URL, after which
+`--source-url` is optional — pass it only to override the stored host for one
+run.
 
 | Value | Environment variable |
 |---|---|

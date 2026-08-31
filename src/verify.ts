@@ -11,6 +11,7 @@
  * rejected by every account-level endpoint, so a failure there would say
  * nothing about whether discovery will work.
  */
+import { githubBaseUrl } from './scm/github';
 import { getBitbucketCloudAuth } from './scm/bitbucket-cloud';
 import { bitbucketServerAuthHeader } from './scm/bitbucket-server';
 import { basicAuth, scmGet, ScmError } from './scm/http';
@@ -23,8 +24,6 @@ export type VerifyResult =
 
 /** Why a given source cannot be verified without more input than login has. */
 const UNVERIFIABLE: Record<string, string> = {
-  'github-enterprise':
-    'verifying needs your GitHub Enterprise host, which is supplied at import time via --source-url',
   'azure-repos':
     'an Azure PAT scoped to Code only is rejected by account-level endpoints, so a check here would prove nothing',
 };
@@ -38,9 +37,9 @@ function describeScmFailure(error: unknown): string {
   return error instanceof Error ? error.message : 'unknown error';
 }
 
-async function verifyGithub(token: string): Promise<VerifyResult> {
+async function verifyGithub(token: string, host?: string): Promise<VerifyResult> {
   const { body } = await scmGet<{ login?: string }>(
-    'https://api.github.com/user',
+    `${githubBaseUrl(host)}/user`,
     { authorization: `token ${token}`, 'x-github-api-version': '2022-11-28' },
     'GitHub credential check',
     { maxAttempts: 2 },
@@ -139,6 +138,19 @@ export async function verifyScmCredential(source: string): Promise<VerifyResult>
       case 'github':
       case 'github-cloud-app':
         return await verifyGithub(process.env.GITHUB_TOKEN ?? '');
+      case 'github-enterprise': {
+        // Self-hosted, so there is no endpoint to fall back on: without a
+        // stored host, guessing one would test the wrong server entirely.
+        const host = storedSourceUrl('github-enterprise');
+        if (!host) {
+          return {
+            status: 'skipped',
+            reason:
+              'no GitHub Enterprise URL is stored yet — re-run `auth login` to add one',
+          };
+        }
+        return await verifyGithub(process.env.GITHUB_TOKEN ?? '', host);
+      }
       case 'gitlab':
         return await verifyGitlab(process.env.GITLAB_TOKEN ?? '');
       case 'bitbucket-cloud':

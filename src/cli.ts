@@ -118,24 +118,43 @@ function usesBitbucketServerAuth(source: string): boolean {
   return 'special' in token && token.special === 'bitbucket-server';
 }
 
+/** Example host shown when a self-hosted source has no URL stored yet. */
+const URL_EXAMPLES: Record<string, string> = {
+  'github-enterprise': 'https://github.example.com',
+  'bitbucket-server': 'https://bitbucket.example.com',
+};
+
 /**
- * Bitbucket Server takes a host plus either a username and password, or an
- * HTTP access token. The host is stored because a self-hosted URL never
- * changes, and requiring --source-url on every import was friction.
+ * Ask for and store a self-hosted source's URL.
+ *
+ * Stored rather than passed every time: a customer's host never changes, and
+ * requiring --source-url on every import was friction with no safety benefit —
+ * a wrong host fails loudly at discovery either way. The flag still overrides
+ * this for a one-off run.
+ */
+async function promptSourceUrl(source: string): Promise<void> {
+  const label = SOURCES[source].label;
+  const current = storedSourceUrl(source);
+  const hint = current ? ` [current: ${current}]` : ` (e.g. ${URL_EXAMPLES[source] ?? 'https://scm.example.com'})`;
+
+  const url = await ask(`\n${label} URL${hint}: `);
+  if (url) {
+    setSourceUrl(source, url.trim());
+    return;
+  }
+  if (!current) {
+    throw new Error(
+      `${label} is self-hosted, so it needs its URL — there is no default host to fall back on.`,
+    );
+  }
+}
+
+/**
+ * Bitbucket Server takes either a username and password, or an HTTP access
+ * token. Its URL is collected separately, by promptSourceUrl.
  */
 async function promptBitbucketServer(existing: Credentials): Promise<Credentials> {
   const creds: Credentials = {};
-
-  const current = storedSourceUrl('bitbucket-server');
-  const url = await ask(
-    `\nBitbucket Server URL${current ? ` [current: ${current}]` : ' (e.g. https://bitbucket.example.com)'}: `,
-  );
-  if (url) setSourceUrl('bitbucket-server', url.trim());
-  if (!url && !current) {
-    throw new Error(
-      'Bitbucket Server needs its URL — there is no default host for a self-hosted server.',
-    );
-  }
 
   console.log(
     '\nAuthenticate with a username and password, or leave the username blank\n' +
@@ -167,9 +186,9 @@ async function promptForSource(): Promise<string> {
   names.forEach((name, i) => {
     // Snyk's own name for it, then the --source value, since the two differ
     // for the App integrations and users are matching against the Snyk UI.
-    const note = REQUIRES_SOURCE_URL.has(name) ? '  (needs --source-url)' : '';
+    // No --source-url note: login asks self-hosted sources for their URL.
     const label = SOURCES[name].label.padEnd(labelWidth);
-    console.log(`  [${String(i + 1).padStart(names.length >= 10 ? 2 : 1)}] ${label}  --source ${name}${note}`);
+    console.log(`  [${String(i + 1).padStart(names.length >= 10 ? 2 : 1)}] ${label}  --source ${name}`);
   });
 
   for (;;) {
@@ -350,7 +369,13 @@ async function authLogin(): Promise<void> {
   //    it exactly; that is where a missing integration should fail.
   const source = await promptForSource();
 
-  // 4. That source's credential(s), verified.
+  // 4. A self-hosted source needs its host before its credential — and the
+  //    credential check below cannot run without it either.
+  if (REQUIRES_SOURCE_URL.has(source)) {
+    await promptSourceUrl(source);
+  }
+
+  // 5. That source's credential(s), verified.
   if (usesBitbucketCloudAuth(source)) {
     Object.assign(creds, await promptBitbucketCloud(existing));
   } else if (usesBitbucketServerAuth(source)) {
@@ -381,7 +406,7 @@ async function authLogin(): Promise<void> {
   }
   if (saved.length > 0) setCredentials(creds);
 
-  // 5. Everything is entered and checked — now say what happened and where it
+  // 6. Everything is entered and checked — now say what happened and where it
   //    went. Leading with a file path told the user nothing they could act on.
   console.log('');
   if (region) console.log(`✓ Region set to ${region}.`);
