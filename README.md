@@ -3,10 +3,6 @@
 Bulk-import repositories from your source control management (SCM) provider into
 a Snyk organization with a single command.
 
-```bash
-snyk-autoimport import --snyk-org "Acme Corp" --source github-cloud-app --source-org acme-corp
-```
-
 It resolves your Snyk organization and SCM integration, discovers repositories,
 skips anything already imported, submits the import, and reports the outcome —
 replacing the hand-authored JSON files, multi-step commands, and log-file
@@ -137,35 +133,15 @@ snyk-autoimport integrations --snyk-org "Acme Corp"
 | `--snyk-org` | Organization name or slug. An ambiguous name fails rather than resolving to an arbitrary match. |
 | `--snyk-org-id` | Organization UUID. Skips name resolution; recommended for automation. |
 | `--source` | **Required.** Never inferred, because one organization may have several integrations of the same family. |
-| `--source-org` | What to import from, which differs per provider — see below. `--github-org` is an accepted alias. |
+| `--source-org` | The organization, group, workspace or project to import from, depending on the provider. `--github-org` is an accepted alias. |
 | `--source-url` | Host for self-hosted providers. Only needed if `auth login` has not stored it. |
 | `--region` | Overrides the stored region. |
 | `--dry-run` | Show what would be imported and exit, changing nothing. |
 | `--yes` | Skip the confirmation prompt. Required for non-interactive use. |
 
-`--source-org` is the flag most easily passed wrong:
-
-| `--source` | Snyk UI name | `--source-org` is |
-|---|---|---|
-| `github`, `github-cloud-app`, `github-enterprise` | GitHub, GitHub Cloud App, GitHub Enterprise | a GitHub **organization** (personal accounts are not supported) |
-| `gitlab` | GitLab | a GitLab **group**, possibly nested (`group/subgroup`) |
-| `azure-repos` | Azure Repos | an Azure DevOps **organization** — every project inside it is discovered |
-| `bitbucket-cloud`, `bitbucket-connect-app` | Bitbucket Cloud, Bitbucket Cloud App | a Bitbucket **workspace** |
-| `bitbucket-server` | Bitbucket Server | a Bitbucket **project name** |
-
-`bitbucket-connect-app` is the integration Snyk shows as **Bitbucket Cloud App**
-and is what a recently-connected workspace will have; `bitbucket-cloud` is the
-older username/app-password integration. `github-server-app` is not supported —
-its project origin has no verified deduplication mapping.
-
 With `github-cloud-app`, a repository the Snyk GitHub App was not granted access
 to is discovered but fails with `404` at import — discovery uses your own token,
 which typically sees more than the App was granted.
-
-If the `--source` you pass is not configured on the target organization, the
-command stops before discovering anything and tells you to connect it in Snyk.
-It deliberately does not offer one of the organization's other integrations
-instead, which would risk importing the wrong repositories into the wrong place.
 
 ## Credentials and configuration
 
