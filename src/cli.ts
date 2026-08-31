@@ -60,7 +60,11 @@ import { SOURCES, REQUIRES_SOURCE_URL, KNOWN_UNSUPPORTED, GITHUB_CLOUD_APP_SOURC
 import { printSummary } from './report';
 import { describeTarget } from './target-format';
 import { ask, askSecret, confirm, isInteractive } from './prompt';
-import { verifyScmCredential, type VerifyResult } from './verify';
+import {
+  verifyScmCredential,
+  findOrgsWithIntegration,
+  type VerifyResult,
+} from './verify';
 import {
   getBitbucketCloudAuth,
   describeError,
@@ -139,11 +143,11 @@ async function promptForSource(): Promise<string> {
  * secret — and rather than at the start of a real import.
  */
 async function verifySnykToken(): Promise<
-  { ok: true; orgCount: number } | { ok: false; reason: string }
+  { ok: true; orgs: OrgSummary[] } | { ok: false; reason: string }
 > {
   try {
     const orgs = await listAllOrgs(makeRequestManager('snyk-autoimport:auth'));
-    return { ok: true, orgCount: orgs.length };
+    return { ok: true, orgs };
   } catch (error) {
     const detail = describeError(error);
     const reason =
@@ -190,10 +194,15 @@ async function promptRegion(config: StoredConfig): Promise<Region | undefined> {
   }
 }
 
-/** Prompt for a Snyk token and verify it, re-prompting while it fails. */
+/**
+ * Prompt for a Snyk token and verify it, re-prompting while it fails.
+ *
+ * Returns the org list from that verification alongside the token, so the
+ * integration check below can reuse it rather than calling /orgs again.
+ */
 async function promptAndVerifySnykToken(
   existing: Credentials,
-): Promise<string | undefined> {
+): Promise<{ token?: string; orgs: OrgSummary[] }> {
   for (;;) {
     const entered = await askSecret(secretPrompt('snykToken', existing));
     const effective = entered || existing.snykToken;
@@ -210,10 +219,9 @@ async function promptAndVerifySnykToken(
     process.stdout.write('  Checking token... ');
     const result = await verifySnykToken();
     if (result.ok) {
-      console.log(
-        `✓ valid (${result.orgCount} organization${result.orgCount === 1 ? '' : 's'} visible)`,
-      );
-      return entered || undefined;
+      const n = result.orgs.length;
+      console.log(`✓ valid (${n} organization${n === 1 ? '' : 's'} visible)`);
+      return { token: entered || undefined, orgs: result.orgs };
     }
 
     console.log(`✗ ${result.reason}`);
@@ -257,6 +265,47 @@ async function promptBitbucketCloud(existing: Credentials): Promise<Credentials>
   return creds;
 }
 
+/**
+ * Stop unless the chosen source's integration exists somewhere the token can
+ * see. Connecting an integration is a Snyk-side action in the web UI, so this
+ * fails with that instruction rather than letting the user discover it later
+ * as an "integration not configured" error mid-import.
+ */
+async function requireIntegrationConfigured(
+  source: string,
+  orgs: readonly OrgSummary[],
+): Promise<void> {
+  process.stdout.write(`\nChecking ${source} is configured in Snyk...\n`);
+  const rm = makeRequestManager('snyk-autoimport:auth');
+  const { configuredIn, orgsChecked, orgsTotal } = await findOrgsWithIntegration(
+    rm,
+    source,
+    orgs,
+  );
+
+  if (configuredIn.length > 0) {
+    const names = configuredIn.map((o) => o.name).sort();
+    const shown = names.slice(0, 5).join(', ');
+    const more = names.length > 5 ? `, +${names.length - 5} more` : '';
+    console.log(`  ✓ configured in ${names.length} organization(s): ${shown}${more}`);
+    return;
+  }
+
+  const scope =
+    orgsChecked < orgsTotal
+      ? `the first ${orgsChecked} of ${orgsTotal} organizations`
+      : `all ${orgsChecked} organization(s)`;
+  throw new Error(
+    `No "${source}" integration is configured in ${scope} this token can see.\n\n` +
+      'This is set up in Snyk, not here:\n' +
+      '  1. Open the target organization in https://app.snyk.io\n' +
+      '  2. Settings → Integrations → connect the one you want\n' +
+      `  3. Re-run \`auth login\` and pick ${source} again\n\n` +
+      'Nothing was saved. Run `snyk-autoimport integrations --snyk-org "<name>"` ' +
+      'to see what a given organization does have.',
+  );
+}
+
 /** Print the outcome of a credential check as one indented status line. */
 function printVerifyResult(result: VerifyResult): void {
   if (result.status === 'ok') console.log(`  ✓ ${result.detail}`);
@@ -281,11 +330,16 @@ async function authLogin(): Promise<void> {
   // 2. Snyk token, verified before going any further.
   console.log('');
   const creds: Credentials = {};
-  const snykToken = await promptAndVerifySnykToken(existing);
+  const { token: snykToken, orgs } = await promptAndVerifySnykToken(existing);
   if (snykToken) creds.snykToken = snykToken;
 
-  // 3. Which source, and its credential(s), also verified.
+  // 3. Which source. Checked against Snyk before asking for its credential —
+  //    no point collecting a secret for an integration that cannot be used,
+  //    and this is a Snyk-side setup step the user has to do in the UI.
   const source = await promptForSource();
+  await requireIntegrationConfigured(source, orgs);
+
+  // 4. That source's credential(s), also verified.
   if (usesBitbucketCloudAuth(source)) {
     Object.assign(creds, await promptBitbucketCloud(existing));
   } else {
@@ -314,7 +368,7 @@ async function authLogin(): Promise<void> {
   }
   if (saved.length > 0) setCredentials(creds);
 
-  // 4. Everything is entered and checked — now say what happened and where it
+  // 5. Everything is entered and checked — now say what happened and where it
   //    went. Leading with a file path told the user nothing they could act on.
   console.log('');
   if (region) console.log(`✓ Region set to ${region}.`);

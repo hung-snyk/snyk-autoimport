@@ -175,6 +175,9 @@ Which source will you import from?
   [8] bitbucket-connect-app
 Pick one (1-8 or name): 4
 
+Checking gitlab is configured in Snyk...
+  ✓ configured in 4 organization(s): Acme Corp, Acme Labs, demo, sandbox
+
 GitLab token: ***
 
 Checking gitlab credentials...
@@ -186,9 +189,17 @@ Checking gitlab credentials...
     Environment variables override this file, so CI never needs it.
 ```
 
-Both credentials are checked against a live API before the command finishes,
-so a mistyped or expired one surfaces here rather than part-way through an
-import.
+Three checks run against live APIs before the command finishes, so a problem
+surfaces here rather than part-way through an import:
+
+1. **The Snyk token** — verified against the chosen region.
+2. **The integration** — the selected source must be configured on at least one
+   organization the token can see. Connecting an integration is a Snyk-side
+   action in the web UI, so if none is found the command stops and says so,
+   rather than collecting a credential that cannot be used. The organizations
+   that *do* have it are listed, which is also the answer to "where can I
+   import this from".
+3. **The source credential** — verified against the provider.
 
 The region is asked first because the Snyk token is verified against that
 region's API — a token valid in SNYK-EU-01 returns `401` against the US host,

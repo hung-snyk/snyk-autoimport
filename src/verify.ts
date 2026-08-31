@@ -11,8 +11,11 @@
  * rejected by every account-level endpoint, so a failure there would say
  * nothing about whether discovery will work.
  */
+import type { requestsManager } from 'snyk-request-manager';
 import { getBitbucketCloudAuth } from './scm/bitbucket-cloud';
 import { basicAuth, scmGet, ScmError } from './scm/http';
+import { mapWithConcurrency } from './snyk/async';
+import { listIntegrationsMap, type OrgSummary } from './snyk';
 
 export type VerifyResult =
   | { status: 'ok'; detail: string }
@@ -121,4 +124,52 @@ export async function verifyScmCredential(source: string): Promise<VerifyResult>
   } catch (error) {
     return { status: 'failed', reason: describeScmFailure(error) };
   }
+}
+
+/**
+ * How many organizations to inspect when looking for an integration.
+ *
+ * A token can see a great many orgs, and this runs interactively — so it is
+ * capped, and the caller is told when the answer is therefore partial rather
+ * than being quietly given a "not configured" that only means "not found in
+ * the first few".
+ */
+const MAX_ORGS_TO_CHECK = 25;
+
+export interface IntegrationCheck {
+  /** Organizations that have this source's integration configured. */
+  configuredIn: OrgSummary[];
+  orgsChecked: number;
+  orgsTotal: number;
+}
+
+/**
+ * Find which organizations have a given source configured.
+ *
+ * `auth login` collects credentials, not a target organization, and
+ * integrations are per-organization — so rather than asking for one, this
+ * looks across everything the token can see. The result doubles as useful
+ * information: it names the organizations the chosen source can import into.
+ *
+ * An organization that cannot be read is skipped rather than failing the whole
+ * check; a token with partial access is normal.
+ */
+export async function findOrgsWithIntegration(
+  rm: requestsManager,
+  source: string,
+  orgs: readonly OrgSummary[],
+): Promise<IntegrationCheck> {
+  const toCheck = orgs.slice(0, MAX_ORGS_TO_CHECK);
+  const configuredIn: OrgSummary[] = [];
+
+  await mapWithConcurrency(toCheck, 5, async (org) => {
+    try {
+      const integrations = await listIntegrationsMap(rm, org.id);
+      if (integrations[source]) configuredIn.push(org);
+    } catch {
+      // No access to this org's settings — not evidence either way.
+    }
+  });
+
+  return { configuredIn, orgsChecked: toCheck.length, orgsTotal: orgs.length };
 }
