@@ -154,7 +154,12 @@ Manages locally stored credentials.
 only paste the credential you actually need:
 
 ```text
-Region — snyk-us-01 / snyk-us-02 / snyk-eu-01 / snyk-au-01 [current: snyk-us-01]:
+Which Snyk region is your account on?
+  [1] snyk-us-01  (default, current)
+  [2] snyk-us-02
+  [3] snyk-eu-01
+  [4] snyk-au-01
+Pick one (1-4 or name) [blank keeps snyk-us-01]:
 
 Snyk API token: ***
   Checking token... ✓ valid (6 organizations visible)
@@ -171,13 +176,29 @@ Which source will you import from?
 Pick one (1-8 or name): 4
 
 GitLab token: ***
+
+Checking gitlab credentials...
+  ✓ authenticated as gl-user
+
+✓ Region set to snyk-eu-01.
+✓ Stored 2 credential(s), chmod 600:
+    /path/to/snyk-autoimport/.snyk-autoimport.json
+    Environment variables override this file, so CI never needs it.
 ```
 
-The region is asked first because the token is verified against that region's
-API — a token valid in SNYK-EU-01 returns `401` against the US host, so asking
-afterwards would make a correct token look broken. The check runs before you
-are asked for anything else, so a mistyped or expired token surfaces here
-rather than part-way through an import.
+Both credentials are checked against a live API before the command finishes,
+so a mistyped or expired one surfaces here rather than part-way through an
+import.
+
+The region is asked first because the Snyk token is verified against that
+region's API — a token valid in SNYK-EU-01 returns `401` against the US host,
+so asking afterwards would make a correct token look broken.
+
+Three sources report `– not checked` instead of a result, and say why:
+`github-enterprise` and `bitbucket-server` need a host that is only supplied at
+import time via `--source-url`, and an Azure PAT scoped to Code alone is
+rejected by every account-level endpoint, so a check would prove nothing either
+way.
 
 Select the source by number or by its exact `--source` name; anything else is
 rejected and re-prompted. Typed tokens are masked, and a prompt left blank keeps

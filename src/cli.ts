@@ -25,6 +25,8 @@ import {
   legacyConfigFilePath,
   usingLegacyConfig,
   CREDENTIAL_LABELS,
+  CREDENTIAL_KEYS,
+  CREDENTIAL_ENV_VARS,
   type Credentials,
   type StoredConfig,
 } from './config';
@@ -58,6 +60,7 @@ import { SOURCES, REQUIRES_SOURCE_URL, KNOWN_UNSUPPORTED, GITHUB_CLOUD_APP_SOURC
 import { printSummary } from './report';
 import { describeTarget } from './target-format';
 import { ask, askSecret, confirm, isInteractive } from './prompt';
+import { verifyScmCredential, type VerifyResult } from './verify';
 import {
   getBitbucketCloudAuth,
   describeError,
@@ -156,13 +159,35 @@ async function verifySnykToken(): Promise<
  * token requires knowing which regional API to verify it against. A token
  * valid in SNYK-EU-01 returns 401 against the US host, so asking for the
  * region afterwards would make a correct token look broken.
+ *
+ * Numbered like the source picker, so both selections work the same way.
  */
 async function promptRegion(config: StoredConfig): Promise<Region | undefined> {
-  const current = config.defaults?.region ?? DEFAULT_REGION;
-  const answer = await ask(
-    `Region — ${REGIONS.join(' / ')} [current: ${current}]: `,
-  );
-  return answer ? parseRegion(answer) : undefined;
+  const current = (config.defaults?.region as Region | undefined) ?? DEFAULT_REGION;
+  console.log('Which Snyk region is your account on?');
+  REGIONS.forEach((name, i) => {
+    const notes = [
+      name === DEFAULT_REGION ? 'default' : undefined,
+      name === current ? 'current' : undefined,
+    ].filter(Boolean);
+    console.log(`  [${i + 1}] ${name}${notes.length ? `  (${notes.join(', ')})` : ''}`);
+  });
+
+  for (;;) {
+    const answer = await ask(`Pick one (1-${REGIONS.length} or name) [blank keeps ${current}]: `);
+    if (!answer) return undefined;
+
+    const byNumber = REGIONS[Number(answer) - 1];
+    if (byNumber) return byNumber;
+    try {
+      return parseRegion(answer);
+    } catch {
+      console.log(
+        `  "${answer}" is not a region — enter a number from 1 to ${REGIONS.length}, ` +
+          'or an exact name from the list.',
+      );
+    }
+  }
 }
 
 /** Prompt for a Snyk token and verify it, re-prompting while it fails. */
@@ -232,18 +257,24 @@ async function promptBitbucketCloud(existing: Credentials): Promise<Credentials>
   return creds;
 }
 
+/** Print the outcome of a credential check as one indented status line. */
+function printVerifyResult(result: VerifyResult): void {
+  if (result.status === 'ok') console.log(`  ✓ ${result.detail}`);
+  else if (result.status === 'failed') console.log(`  ✗ ${result.reason}`);
+  else console.log(`  – not checked: ${result.reason}`);
+}
+
 async function authLogin(): Promise<void> {
   if (!isInteractive()) {
     throw new Error('auth login requires an interactive terminal.');
   }
   const config = loadConfig();
   const existing = config.credentials ?? {};
-  console.log('Enter credentials (stored at ' + configFilePath() + ', chmod 600).');
-  console.log('Typed tokens are masked. Leave a prompt blank to keep its current value.\n');
 
-  // 1. Region, before the token: the token is verified against this region's API.
+  // 1. Region, before the token: the token is verified against this region.
   const region = await promptRegion(config);
-  const effectiveRegion = region ?? (config.defaults?.region as Region | undefined) ?? DEFAULT_REGION;
+  const effectiveRegion =
+    region ?? (config.defaults?.region as Region | undefined) ?? DEFAULT_REGION;
   process.env.SNYK_API = REGION_API_HOSTS[effectiveRegion];
   if (region) setRegion(region);
 
@@ -253,7 +284,7 @@ async function authLogin(): Promise<void> {
   const snykToken = await promptAndVerifySnykToken(existing);
   if (snykToken) creds.snykToken = snykToken;
 
-  // 3. Which source, and its credential(s).
+  // 3. Which source, and its credential(s), also verified.
   const source = await promptForSource();
   if (usesBitbucketCloudAuth(source)) {
     Object.assign(creds, await promptBitbucketCloud(existing));
@@ -266,17 +297,41 @@ async function authLogin(): Promise<void> {
     }
   }
 
+  // Publish what was just entered (falling back to what was already stored) so
+  // the check below tests the credential the user will actually import with.
+  for (const key of CREDENTIAL_KEYS) {
+    const value = creds[key] ?? existing[key];
+    if (value) process.env[CREDENTIAL_ENV_VARS[key]] = value;
+  }
+  process.stdout.write(`\nChecking ${source} credentials...\n`);
+  const scmResult = await verifyScmCredential(source);
+  printVerifyResult(scmResult);
+
   const saved = Object.keys(creds) as Array<keyof Credentials>;
   if (saved.length === 0 && !region) {
     console.log('\nNothing entered — no changes.');
     return;
   }
+  if (saved.length > 0) setCredentials(creds);
+
+  // 4. Everything is entered and checked — now say what happened and where it
+  //    went. Leading with a file path told the user nothing they could act on.
+  console.log('');
+  if (region) console.log(`✓ Region set to ${region}.`);
   if (saved.length > 0) {
-    setCredentials(creds);
-    console.log(`\n✓ Stored: ${saved.map((k) => CREDENTIAL_LABELS[k]).join(', ')}.`);
+    console.log(`✓ Stored ${saved.length} credential(s), chmod 600:`);
+    console.log(`    ${configFilePath()}`);
+    console.log(
+      '    Environment variables override this file, so CI never needs it.',
+    );
   }
-  if (region) {
-    console.log(`✓ Region set to ${region}.`);
+
+  if (scmResult.status === 'failed') {
+    console.log(
+      `\n⚠ The ${source} credential did not pass its check, so an import will ` +
+        'likely fail.\n  Re-run `auth login` once you have a working one.',
+    );
+    return;
   }
   console.log(
     `\nNext: snyk-autoimport import --snyk-org "<name>" --source ${source} ` +
