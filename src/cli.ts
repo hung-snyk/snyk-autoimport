@@ -18,7 +18,7 @@ import { hideBin } from 'yargs/helpers';
 import {
   configFilePath,
   setCredentials,
-  clearCredentials,
+  clearStoredConfig,
   loadConfig,
   setRegion,
   setSourceUrl,
@@ -770,8 +770,9 @@ async function main(): Promise<void> {
           const action = a.action as string;
           if (action === 'login') await authLogin();
           else if (action === 'logout') {
-            clearCredentials();
-            console.log('✓ Credentials cleared.');
+            clearStoredConfig();
+            console.log('✓ Cleared stored credentials, region and server URLs.');
+            console.log(`  ${configFilePath()}`);
           } else authStatus();
         })();
       },

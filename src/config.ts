@@ -176,10 +176,18 @@ export function setCredentials(creds: Credentials): void {
   saveConfig(config);
 }
 
-export function clearCredentials(): void {
-  const config = loadConfig();
-  delete config.credentials;
-  saveConfig(config);
+/**
+ * Logout is a clean slate, not just a credential wipe.
+ *
+ * The region and any stored self-hosted URLs are account-specific too: leaving
+ * a customer's internal Bitbucket Server host, or a non-default region, behind
+ * for whoever logs in next is both surprising and a small information leak.
+ *
+ * Writes an empty config rather than deleting the file, so a leftover legacy
+ * config cannot quietly become the active one again after a logout.
+ */
+export function clearStoredConfig(): void {
+  saveConfig({});
 }
 
 export function setRegion(region: Region): void {

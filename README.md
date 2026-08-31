@@ -56,7 +56,7 @@ snyk-autoimport` to remove). Examples below use `snyk-autoimport`; substitute
 |---|---|
 | `auth login` | Asks for your region, Snyk token, source, and that source's credential, checking each against a live API. Self-hosted sources are also asked for their server URL, which is stored. One source at a time — run it again to add another. Requires an interactive terminal. |
 | `auth status` | Shows the config path, which credentials are set, and the region. Token values are never printed. |
-| `auth logout` | Removes stored credentials. |
+| `auth logout` | Clears everything stored: credentials, region and any saved server URLs. |
 | `integrations --snyk-org "<name>"` | Lists the SCM integrations configured on an organization, with the `--source` value for each. Use it when unsure which to pass — an organization can have several from the same family, and `github` and `github-cloud-app` behave differently. |
 | `import --snyk-org "<name>" --source <source> --source-org <org>` | Discovers repositories, skips those already imported, submits the rest, and prints a summary. |
 
