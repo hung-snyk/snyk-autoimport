@@ -114,12 +114,16 @@ function usesBitbucketCloudAuth(source: string): boolean {
 /** Require one of the supported sources, re-prompting until a valid pick. */
 async function promptForSource(): Promise<string> {
   const names = Object.keys(SOURCES);
+  // Width comes from the longest label, not a constant: a hardcoded 18 was
+  // silently outgrown by "Bitbucket Cloud App" and broke the column.
+  const labelWidth = Math.max(...names.map((name) => SOURCES[name].label.length));
   console.log('\nWhich source will you import from?');
   names.forEach((name, i) => {
     // Snyk's own name for it, then the --source value, since the two differ
     // for the App integrations and users are matching against the Snyk UI.
     const note = REQUIRES_SOURCE_URL.has(name) ? '  (needs --source-url)' : '';
-    console.log(`  [${i + 1}] ${SOURCES[name].label.padEnd(18)} --source ${name}${note}`);
+    const label = SOURCES[name].label.padEnd(labelWidth);
+    console.log(`  [${String(i + 1).padStart(names.length >= 10 ? 2 : 1)}] ${label}  --source ${name}${note}`);
   });
 
   for (;;) {

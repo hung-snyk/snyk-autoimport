@@ -165,13 +165,13 @@ Snyk API token: ***
   Checking token... ✓ valid (6 organizations visible)
 
 Which source will you import from?
-  [1] GitHub             --source github
-  [2] GitHub Cloud App   --source github-cloud-app
-  [3] GitHub Enterprise  --source github-enterprise  (needs --source-url)
-  [4] GitLab             --source gitlab
-  [5] Azure Repos        --source azure-repos
-  [6] Bitbucket Server   --source bitbucket-server  (needs --source-url)
-  [7] Bitbucket Cloud    --source bitbucket-cloud
+  [1] GitHub               --source github
+  [2] GitHub Cloud App     --source github-cloud-app
+  [3] GitHub Enterprise    --source github-enterprise  (needs --source-url)
+  [4] GitLab               --source gitlab
+  [5] Azure Repos          --source azure-repos
+  [6] Bitbucket Server     --source bitbucket-server  (needs --source-url)
+  [7] Bitbucket Cloud      --source bitbucket-cloud
   [8] Bitbucket Cloud App  --source bitbucket-connect-app
 Pick one (1-8 or name): 4
 
