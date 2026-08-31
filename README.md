@@ -27,10 +27,8 @@ client or provider SDKs — discovery uses the Node runtime's built-in `fetch`.
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Commands](#commands)
-- [What an import looks like](#what-an-import-looks-like)
 - [Credentials and configuration](#credentials-and-configuration)
 - [Continuous integration](#continuous-integration)
-- [License](#license)
 
 ## Requirements
 
@@ -59,12 +57,14 @@ snyk-autoimport` to remove). Examples below use `snyk-autoimport`; substitute
 ## Quick start
 
 ```bash
-snyk-autoimport auth login                              # one time, interactive
-snyk-autoimport integrations --snyk-org "Acme Corp"     # which --source to use
-snyk-autoimport import --snyk-org "Acme Corp" \
-  --source github-cloud-app --source-org acme-corp --dry-run
-snyk-autoimport import --snyk-org "Acme Corp" \
-  --source github-cloud-app --source-org acme-corp
+# One time, interactive: region, Snyk token, source and its credential
+snyk-autoimport auth login
+
+# Import every repo in a GitHub org into a Snyk org
+snyk-autoimport import \
+  --snyk-org "Acme Corp" \
+  --source github-cloud-app \
+  --source-org acme-corp
 ```
 
 Re-running is safe: repositories already in Snyk are skipped, so a partially
@@ -80,20 +80,44 @@ failed run can simply be repeated.
 | `auth status` | Shows the config path, which credentials are set, and the region. Token values are never printed. |
 | `auth logout` | Removes stored credentials. |
 
-`auth login` asks for one source at a time, so you only paste the credential you
-need. Run it again to add another. Three things are checked against live APIs
-before it finishes, so a problem surfaces here rather than mid-import:
+One source at a time, so you only paste the credential you need — run it again
+to add another. Both credentials are checked against a live API before it
+finishes, and self-hosted sources are asked for their server URL too.
 
-- **Region first**, because the Snyk token is verified against that region's API
-  — a token valid in `SNYK-EU-01` returns `401` against the US host.
-- **The Snyk token**, by listing the organizations it can see.
-- **The source credential**, against the provider. `azure-repos` is reported as
-  "not checked" rather than guessed: a PAT scoped to Code alone is rejected by
-  every account-level endpoint, so a result would mean nothing.
+```text
+$ snyk-autoimport auth login
 
-Self-hosted sources (`github-enterprise`, `bitbucket-server`) are also asked for
-their server URL, which is stored — after that `--source-url` is only needed to
-override it for one run.
+Which Snyk region is your account on?
+  [1] snyk-us-01  (default, current)
+  [2] snyk-us-02
+  [3] snyk-eu-01
+  [4] snyk-au-01
+Pick one (1-4 or name) [blank keeps snyk-us-01]:
+
+Snyk API token: ***
+  Checking token... ✓ valid (6 organizations visible)
+
+Which source will you import from?
+  [1] GitHub               --source github
+  [2] GitHub Cloud App     --source github-cloud-app
+  [3] GitHub Enterprise    --source github-enterprise
+  [4] GitLab               --source gitlab
+  [5] Azure Repos          --source azure-repos
+  [6] Bitbucket Server     --source bitbucket-server
+  [7] Bitbucket Cloud      --source bitbucket-cloud
+  [8] Bitbucket Cloud App  --source bitbucket-connect-app
+Pick one (1-8 or name): 7
+
+Bitbucket Cloud email or username: you@example.com
+Bitbucket Cloud API token or app password: ***
+
+Checking bitbucket-cloud credentials...
+  ✓ authenticated as Your Name
+
+✓ Stored 2 credential(s), chmod 600:
+    /path/to/snyk-autoimport/.snyk-autoimport.json
+    Environment variables override this file, so CI never needs it.
+```
 
 ### `integrations`
 
@@ -134,58 +158,30 @@ and is what a recently-connected workspace will have; `bitbucket-cloud` is the
 older username/app-password integration. `github-server-app` is not supported —
 its project origin has no verified deduplication mapping.
 
+With `github-cloud-app`, a repository the Snyk GitHub App was not granted access
+to is discovered but fails with `404` at import — discovery uses your own token,
+which typically sees more than the App was granted.
+
 If the `--source` you pass is not configured on the target organization, the
 command stops before discovering anything and tells you to connect it in Snyk.
 It deliberately does not offer one of the organization's other integrations
 instead, which would risk importing the wrong repositories into the wrong place.
 
-## What an import looks like
-
-```text
-✓ Resolved "Acme Corp" → d2f6e6d5-… (group: Acme Ltd)
-✓ Using github-cloud-app integration 0686349f-…
-Discovering repos in acme-corp...
-✓ Found 24 repo(s)
-✓ 21 already imported — 3 new to import
-
-Importing... Snyk clones each repo and scans it for manifests, which usually takes a few minutes.
-  … still scanning (15s) — 0/3 repos done
-  … still scanning (1m 15s) — 2/3 repos done
-
-Done.
-  11 project(s) created
-```
-
-**Expect minutes, not seconds.** Snyk clones and scans each repository
-server-side; one repository commonly takes one to three minutes and nothing on
-the client can make that faster. The `… still scanning` line prints every 15
-seconds so a long import is distinguishable from a stalled one.
-
-**Repos and projects are different counts.** Projects are what Snyk creates, one
-per manifest found — so one repository routinely produces several, and a
-repository with no supported manifests produces none. `0 project(s) created` is a
-normal, successful result for such a repository.
-
-With `github-cloud-app`, a repository the Snyk GitHub App was not granted access
-to is discovered but fails with `404` during import: discovery uses your own
-token, which typically sees more than the App was granted.
-
 ## Credentials and configuration
 
 `auth login` writes `.snyk-autoimport.json` with `0600` permissions, resolved
 from the installed package directory — so logging in once holds wherever you run
-the command from. Run `auth status` to print the path. One consequence: a second
-checkout (a `git worktree`, or another clone) is a separate package directory and
-needs its own login.
+from. `auth status` prints the path. A second checkout (another clone, or a `git
+worktree`) is a separate package directory and needs its own login.
 
 > [!WARNING]
 > This file holds live tokens inside a git working tree. Its `.gitignore` entry
 > is load-bearing — do not remove it, and do not `git add -f` the file. If you
 > fork or copy this repository, confirm the entry survived.
 
-Environment variables always win over the stored file, so automation can supply
-secrets without ever writing a token to disk. This is the recommended approach
-for CI and shared machines.
+Environment variables always win over the file, so automation can supply secrets
+without writing a token to disk — the recommended approach for CI and shared
+machines:
 
 | Source | Variables |
 |---|---|
@@ -193,26 +189,13 @@ for CI and shared machines.
 | GitHub (all three) | `GITHUB_TOKEN` |
 | GitLab | `GITLAB_TOKEN` |
 | Azure Repos | `AZURE_TOKEN` |
-| Bitbucket Cloud (both) | `BITBUCKET_CLOUD_USERNAME` + `BITBUCKET_CLOUD_PASSWORD` (Basic), or `BITBUCKET_CLOUD_API_TOKEN` / `BITBUCKET_CLOUD_OAUTH_TOKEN` (Bearer). `BITBUCKET_CLOUD_AUTH_METHOD` forces one of `user`, `api`, `oauth`. |
+| Bitbucket Cloud (both) | `BITBUCKET_CLOUD_USERNAME` + `BITBUCKET_CLOUD_PASSWORD` (Basic), or `BITBUCKET_CLOUD_API_TOKEN` / `BITBUCKET_CLOUD_OAUTH_TOKEN` (Bearer). `BITBUCKET_CLOUD_AUTH_METHOD` forces `user`, `api` or `oauth`. |
 | Bitbucket Server | `BITBUCKET_SERVER_USERNAME` + `BITBUCKET_SERVER_PASSWORD` (Basic), or `BITBUCKET_SERVER_TOKEN` (Bearer) |
-| Pacing | `CONCURRENT_IMPORTS` (default 15) |
 
-For Bitbucket Cloud Basic auth, pair an Atlassian account **email** with an **API
-token**, or a Bitbucket **username** with an **app password** — crossing them
-over fails. For Bitbucket Server, setting a username selects Basic, so a username
-with no password is an error rather than a silent fall back to the token.
-
-### Regions
-
-Pass `--region`, or set it during `auth login`. Accepted values are
-`snyk-us-01` (default), `snyk-us-02`, `snyk-eu-01` and `snyk-au-01` —
-case-insensitive, and identical to the aliases `snyk config environment` takes.
-See
-[Regional hosting and data residency](https://docs.snyk.io/snyk-data-and-governance/regional-hosting-and-data-residency)
-for which one you are on.
-
-Note that recent US Enterprise and Pilot accounts are on **SNYK-US-02**, not the
-default. SNYK-GOV-01 is not supported: it does not accept API keys.
+For Bitbucket Cloud, pair an Atlassian **email** with an **API token**, or a
+Bitbucket **username** with an **app password** — crossing them over fails. For
+Bitbucket Server, a username selects Basic, so a username with no password is an
+error rather than a silent fall back to the token.
 
 ## Continuous integration
 
@@ -229,7 +212,3 @@ SNYK_TOKEN="$SNYK_TOKEN" GITHUB_TOKEN="$GITHUB_TOKEN" \
 Deduplication runs against live Snyk state every time, so this is safe to run on
 a schedule to pick up new repositories. Budget wall-clock time rather than a
 fixed timeout: the run lasts as long as Snyk takes to scan everything submitted.
-
-## License
-
-Licensed under the Apache License 2.0.
