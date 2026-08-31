@@ -7,7 +7,8 @@
  *
  * A target that produces no projects (a repo with no supported manifests)
  * completes normally with an empty project list. That is a success, not an
- * error, and is why the summary counts projects rather than targets.
+ * error — so results are reported per job as well as per project, letting the
+ * summary count repositories and still call out the ones that yielded nothing.
  */
 import type { requestsManager } from 'snyk-request-manager';
 import { mapWithConcurrency, sleep } from './async';
@@ -40,6 +41,13 @@ export interface PollFailure {
   errorMessage: string;
 }
 
+/** What one import job produced. One job is one submitted repository. */
+export interface JobResult {
+  locationUrl: string;
+  created: number;
+  failed: number;
+}
+
 export interface PollResult {
   /** Projects Snyk successfully created. */
   projects: Project[];
@@ -47,6 +55,12 @@ export interface PollResult {
   failed: FailedProject[];
   /** Jobs whose status could never be read (the import may still be running). */
   pollFailures: PollFailure[];
+  /**
+   * One entry per job that completed, so results can be counted per repository
+   * as well as per project. Without this the summary can only report projects,
+   * which is a different unit from the repositories the user asked to import.
+   */
+  perJob: JobResult[];
 }
 
 export interface PollProgress {
@@ -120,6 +134,7 @@ export async function pollImportUrls(
   const projects: Project[] = [];
   const failed: FailedProject[] = [];
   const pollFailures: PollFailure[] = [];
+  const perJob: JobResult[] = [];
 
   const jobs = [...new Set(locationUrls)];
   const startedAt = Date.now();
@@ -142,10 +157,18 @@ export async function pollImportUrls(
   try {
     await mapWithConcurrency(jobs, POLL_CONCURRENCY, async (locationUrl) => {
       try {
+        let jobCreated = 0;
+        let jobFailed = 0;
         for (const project of await pollImportUrl(rm, locationUrl, options)) {
-          if (project.success) projects.push(project);
-          else failed.push({ ...project, locationUrl });
+          if (project.success) {
+            projects.push(project);
+            jobCreated++;
+          } else {
+            failed.push({ ...project, locationUrl });
+            jobFailed++;
+          }
         }
+        perJob.push({ locationUrl, created: jobCreated, failed: jobFailed });
       } catch (error) {
         pollFailures.push({
           locationUrl,
@@ -159,5 +182,5 @@ export async function pollImportUrls(
     if (ticker) clearInterval(ticker);
   }
 
-  return { projects, failed, pollFailures };
+  return { projects, failed, pollFailures, perJob };
 }

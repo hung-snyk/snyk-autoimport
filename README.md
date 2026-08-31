@@ -130,14 +130,15 @@ Importing... Snyk clones each repo and scans it for manifests, which usually tak
   … still scanning (1m 15s) — 2/3 repos done
 
 Done.
-  11 project(s) created
+  3 of 3 repo(s) imported — 11 project(s) created
 
 Re-run the same command any time — already-imported repos are skipped automatically.
 ```
 
-Projects are what Snyk creates, one per manifest found — so one repository
-routinely produces several, and a repository with no supported manifests
-produces none.
+Both counts are reported because they answer different questions: repositories
+are what you asked to import, while projects are what Snyk created — one per
+manifest it found. A repository with no supported manifests imports
+successfully and produces none, which the summary calls out separately.
 
 ## Credentials and configuration
 

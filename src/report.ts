@@ -18,11 +18,22 @@ export function printSummary(outcome: ImportOutcome, ctx: ReportContext): void {
 
   console.log('');
   console.log('Done.');
-  console.log(`  ${created} project(s) created`);
+  // Repos first: that is the unit the user asked in. Projects second, because
+  // one repo yields one per manifest, so the two counts rarely match.
+  console.log(
+    `  ${outcome.reposImported} of ${outcome.submittedTargets} repo(s) imported` +
+      ` — ${created} project(s) created`,
+  );
+  if (outcome.reposWithoutProjects > 0) {
+    console.log(
+      `  ${outcome.reposWithoutProjects} of those had no supported manifests, ` +
+        'so produced no projects',
+    );
+  }
 
   if (outcome.kickoffFailures > 0) {
     const details = outcome.kickoffFailureDetails;
-    console.log(`  ${outcome.kickoffFailures} target(s) could not be started:`);
+    console.log(`  ${outcome.kickoffFailures} repo(s) could not be started:`);
     for (const d of details.slice(0, 25)) {
       console.log(`    - ${describeFailure(d, isCloudApp)}`);
     }

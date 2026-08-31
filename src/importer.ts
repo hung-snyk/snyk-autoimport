@@ -17,6 +17,14 @@ export interface ImportOutcome {
   /** Why each of those kickoffs failed. */
   kickoffFailureDetails: FailureEntry[];
   submittedTargets: number;
+  /** Repos whose import job ran to completion, whatever it produced. */
+  reposImported: number;
+  /**
+   * Of those, ones that produced no projects at all. A successful import of a
+   * repo with no supported manifests — worth naming, because nothing is being
+   * scanned there and the repo count alone would imply otherwise.
+   */
+  reposWithoutProjects: number;
 }
 
 export interface RunOptions {
@@ -34,7 +42,7 @@ export async function runImport(
   options: RunOptions = {},
 ): Promise<ImportOutcome> {
   const { pollingUrls, failures } = await importTargets(rm, targets);
-  const { projects, failed, pollFailures } = await pollImportUrls(rm, pollingUrls, {
+  const { projects, failed, pollFailures, perJob } = await pollImportUrls(rm, pollingUrls, {
     onProgress: options.onProgress,
   });
 
@@ -54,6 +62,8 @@ export async function runImport(
       // would be wrong and claiming nothing would hide it.
       ...pollFailures.map((f) => ({ locationUrl: f.locationUrl })),
     ],
+    reposImported: perJob.length,
+    reposWithoutProjects: perJob.filter((j) => j.created === 0 && j.failed === 0).length,
     kickoffFailures: failures.length,
     kickoffFailureDetails: failures.map((f) => ({
       target: f.target,
@@ -72,5 +82,7 @@ export function mergeOutcomes(a: ImportOutcome, b: ImportOutcome): ImportOutcome
     kickoffFailures: a.kickoffFailures + b.kickoffFailures,
     kickoffFailureDetails: [...a.kickoffFailureDetails, ...b.kickoffFailureDetails],
     submittedTargets: a.submittedTargets + b.submittedTargets,
+    reposImported: a.reposImported + b.reposImported,
+    reposWithoutProjects: a.reposWithoutProjects + b.reposWithoutProjects,
   };
 }
