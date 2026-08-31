@@ -17,6 +17,7 @@ export type {
   PollProgress,
   PollResult,
 } from './snyk/poll';
+export { describeError, formatError } from './snyk/http';
 export { listIntegrations } from './snyk/integrations';
 export type { IntegrationsMap } from './snyk/integrations';
 export type { Target, ImportTarget, FilePath, Project } from './snyk/types';

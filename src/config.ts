@@ -18,10 +18,14 @@ import * as path from 'path';
 import type { Region } from './regions';
 
 /**
- * Bitbucket Cloud is deliberately excluded here — its 3-method auth (API
- * token / OAuth token / username+app-password across 4 env vars) is real
- * complexity that would clutter this simple one-token-per-source model.
- * Supported via env vars only for now, not persisted through auth login.
+ * Bitbucket Cloud is the one source needing two fields rather than one: it
+ * authenticates over HTTP Basic, with an Atlassian account email (or Bitbucket
+ * username) as the user and an API token (or app password) as the secret.
+ *
+ * Only that Basic-auth pair is stored. The other two methods Bitbucket
+ * accepts — OAuth tokens and workspace access tokens, which are Bearer rather
+ * than Basic — remain env-var only, since they are short-lived or narrowly
+ * scoped and not worth persisting.
  */
 export interface Credentials {
   snykToken?: string;
@@ -29,6 +33,8 @@ export interface Credentials {
   gitlabToken?: string;
   azureToken?: string;
   bitbucketServerToken?: string;
+  bitbucketCloudUsername?: string;
+  bitbucketCloudPassword?: string;
 }
 
 /** The env var each stored credential is published to for discovery/import. */
@@ -38,6 +44,8 @@ export const CREDENTIAL_ENV_VARS: Record<keyof Credentials, string> = {
   gitlabToken: 'GITLAB_TOKEN',
   azureToken: 'AZURE_TOKEN',
   bitbucketServerToken: 'BITBUCKET_SERVER_TOKEN',
+  bitbucketCloudUsername: 'BITBUCKET_CLOUD_USERNAME',
+  bitbucketCloudPassword: 'BITBUCKET_CLOUD_PASSWORD',
 };
 
 /** Human-readable name for each credential, used in prompts and summaries. */
@@ -47,6 +55,8 @@ export const CREDENTIAL_LABELS: Record<keyof Credentials, string> = {
   gitlabToken: 'GitLab token',
   azureToken: 'Azure DevOps token',
   bitbucketServerToken: 'Bitbucket Server token',
+  bitbucketCloudUsername: 'Bitbucket Cloud email or username',
+  bitbucketCloudPassword: 'Bitbucket Cloud API token or app password',
 };
 
 export const CREDENTIAL_KEYS = Object.keys(CREDENTIAL_ENV_VARS) as Array<

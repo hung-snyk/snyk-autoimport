@@ -26,9 +26,11 @@ import {
   usingLegacyConfig,
   CREDENTIAL_LABELS,
   type Credentials,
+  type StoredConfig,
 } from './config';
 import {
   DEFAULT_REGION,
+  REGION_API_HOSTS,
   REGIONS,
   isRegion,
   parseRegion,
@@ -37,6 +39,7 @@ import {
 import { prepareEnv } from './env';
 import {
   makeRequestManager,
+  listAllOrgs,
   resolveOrg,
   resolveIntegration,
   listIntegrationsMap,
@@ -55,7 +58,13 @@ import { SOURCES, REQUIRES_SOURCE_URL, KNOWN_UNSUPPORTED, GITHUB_CLOUD_APP_SOURC
 import { printSummary } from './report';
 import { describeTarget } from './target-format';
 import { ask, askSecret, confirm, isInteractive } from './prompt';
-import { getBitbucketCloudAuth, type ImportTarget, type PollProgress } from './api';
+import {
+  getBitbucketCloudAuth,
+  describeError,
+  formatError,
+  type ImportTarget,
+  type PollProgress,
+} from './api';
 
 /** "1m 30s" / "45s" — short enough to sit inside a status line. */
 function formatElapsed(ms: number): string {
@@ -83,13 +92,19 @@ function secretPrompt(key: keyof Credentials, existing: Credentials): string {
 }
 
 /**
- * Which stored credential a source's token belongs in. Undefined for
- * bitbucket-cloud, whose 3-method auth is read from its own env vars and is
- * never persisted here (see config.ts).
+ * Which stored credential a source's token belongs in. Undefined for the
+ * Bitbucket Cloud sources, which need a two-field Basic-auth pair instead of a
+ * single token — see bitbucketCloudPrompt below.
  */
 function credentialForSource(source: string): keyof Credentials | undefined {
   const token = SOURCES[source].token;
   return 'special' in token ? undefined : credentialKeyForEnvVar(token.envVar);
+}
+
+/** True for the sources authenticating with the Bitbucket Cloud email/token pair. */
+function usesBitbucketCloudAuth(source: string): boolean {
+  const token = SOURCES[source].token;
+  return 'special' in token && token.special === 'bitbucket-cloud';
 }
 
 /** Require one of the supported sources, re-prompting until a valid pick. */
@@ -114,6 +129,109 @@ async function promptForSource(): Promise<string> {
   }
 }
 
+/**
+ * Confirm a Snyk token actually works, by listing the organizations it can
+ * see. Done before asking anything else, so a wrong or expired token is caught
+ * here rather than after the user has picked a source and pasted a second
+ * secret — and rather than at the start of a real import.
+ */
+async function verifySnykToken(): Promise<
+  { ok: true; orgCount: number } | { ok: false; reason: string }
+> {
+  try {
+    const orgs = await listAllOrgs(makeRequestManager('snyk-autoimport:auth'));
+    return { ok: true, orgCount: orgs.length };
+  } catch (error) {
+    const detail = describeError(error);
+    const reason =
+      detail.status === 401
+        ? 'the token was rejected (401). Check you pasted it whole, and that it matches the region above.'
+        : formatError(detail);
+    return { ok: false, reason };
+  }
+}
+
+/**
+ * Region first, then the Snyk token — in that order because verifying the
+ * token requires knowing which regional API to verify it against. A token
+ * valid in SNYK-EU-01 returns 401 against the US host, so asking for the
+ * region afterwards would make a correct token look broken.
+ */
+async function promptRegion(config: StoredConfig): Promise<Region | undefined> {
+  const current = config.defaults?.region ?? DEFAULT_REGION;
+  const answer = await ask(
+    `Region — ${REGIONS.join(' / ')} [current: ${current}]: `,
+  );
+  return answer ? parseRegion(answer) : undefined;
+}
+
+/** Prompt for a Snyk token and verify it, re-prompting while it fails. */
+async function promptAndVerifySnykToken(
+  existing: Credentials,
+): Promise<string | undefined> {
+  for (;;) {
+    const entered = await askSecret(secretPrompt('snykToken', existing));
+    const effective = entered || existing.snykToken;
+    if (!effective) {
+      throw new Error(
+        'A Snyk API token is required. Get one from https://app.snyk.io/account',
+      );
+    }
+
+    // Publish it for the check below; prepareEnv would otherwise read the old
+    // stored value, which is exactly what we are trying to replace.
+    process.env.SNYK_TOKEN = effective;
+
+    process.stdout.write('  Checking token... ');
+    const result = await verifySnykToken();
+    if (result.ok) {
+      console.log(
+        `✓ valid (${result.orgCount} organization${result.orgCount === 1 ? '' : 's'} visible)`,
+      );
+      return entered || undefined;
+    }
+
+    console.log(`✗ ${result.reason}`);
+    const retry = await confirm('  Enter a different token?');
+    if (!retry) {
+      throw new Error('Stopped without a working Snyk token — nothing was saved.');
+    }
+  }
+}
+
+/**
+ * Bitbucket Cloud needs two values rather than one. The email is not a secret,
+ * so it is echoed normally; only the token is masked.
+ */
+async function promptBitbucketCloud(existing: Credentials): Promise<Credentials> {
+  const creds: Credentials = {};
+  console.log(
+    '\nBitbucket Cloud authenticates over HTTP Basic: your Atlassian account\n' +
+      'email with an API token, or your Bitbucket username with an app password.',
+  );
+
+  const userSuffix = existing.bitbucketCloudUsername
+    ? ` [current: ${existing.bitbucketCloudUsername}]`
+    : '';
+  const username = await ask(
+    `${CREDENTIAL_LABELS.bitbucketCloudUsername}${userSuffix}: `,
+  );
+  if (username) creds.bitbucketCloudUsername = username;
+
+  const token = await askSecret(secretPrompt('bitbucketCloudPassword', existing));
+  if (token) creds.bitbucketCloudPassword = token;
+
+  const haveUser = creds.bitbucketCloudUsername ?? existing.bitbucketCloudUsername;
+  const haveToken = creds.bitbucketCloudPassword ?? existing.bitbucketCloudPassword;
+  if (!haveUser || !haveToken) {
+    console.log(
+      '\n  ⚠ Both values are needed for Basic auth. Discovery will fail until\n' +
+        '    the missing one is set — re-run `auth login` to finish.',
+    );
+  }
+  return creds;
+}
+
 async function authLogin(): Promise<void> {
   if (!isInteractive()) {
     throw new Error('auth login requires an interactive terminal.');
@@ -123,38 +241,33 @@ async function authLogin(): Promise<void> {
   console.log('Enter credentials (stored at ' + configFilePath() + ', chmod 600).');
   console.log('Typed tokens are masked. Leave a prompt blank to keep its current value.\n');
 
-  const creds: Credentials = {};
+  // 1. Region, before the token: the token is verified against this region's API.
+  const region = await promptRegion(config);
+  const effectiveRegion = region ?? (config.defaults?.region as Region | undefined) ?? DEFAULT_REGION;
+  process.env.SNYK_API = REGION_API_HOSTS[effectiveRegion];
+  if (region) setRegion(region);
 
-  const snykToken = await askSecret(secretPrompt('snykToken', existing));
+  // 2. Snyk token, verified before going any further.
+  console.log('');
+  const creds: Credentials = {};
+  const snykToken = await promptAndVerifySnykToken(existing);
   if (snykToken) creds.snykToken = snykToken;
 
+  // 3. Which source, and its credential(s).
   const source = await promptForSource();
-  const key = credentialForSource(source);
-  if (!key) {
-    console.log(
-      `\n${source} authenticates through its own environment variables ` +
-        '(three methods across four variables), so nothing is stored for it here. ' +
-        'See the Bitbucket Cloud section of the README.',
-    );
+  if (usesBitbucketCloudAuth(source)) {
+    Object.assign(creds, await promptBitbucketCloud(existing));
   } else {
-    console.log('');
-    const token = await askSecret(secretPrompt(key, existing));
-    if (token) creds[key] = token;
-  }
-
-  const currentRegion = config.defaults?.region ?? DEFAULT_REGION;
-  const regionInput = await ask(
-    `\nRegion — ${REGIONS.join(' / ')} [current: ${currentRegion}]: `,
-  );
-
-  let regionChanged = false;
-  if (regionInput) {
-    setRegion(parseRegion(regionInput));
-    regionChanged = true;
+    const key = credentialForSource(source);
+    if (key) {
+      console.log('');
+      const token = await askSecret(secretPrompt(key, existing));
+      if (token) creds[key] = token;
+    }
   }
 
   const saved = Object.keys(creds) as Array<keyof Credentials>;
-  if (saved.length === 0 && !regionChanged) {
+  if (saved.length === 0 && !region) {
     console.log('\nNothing entered — no changes.');
     return;
   }
@@ -162,8 +275,8 @@ async function authLogin(): Promise<void> {
     setCredentials(creds);
     console.log(`\n✓ Stored: ${saved.map((k) => CREDENTIAL_LABELS[k]).join(', ')}.`);
   }
-  if (regionChanged) {
-    console.log('✓ Region updated.');
+  if (region) {
+    console.log(`✓ Region set to ${region}.`);
   }
   console.log(
     `\nNext: snyk-autoimport import --snyk-org "<name>" --source ${source} ` +
@@ -186,7 +299,15 @@ function authStatus(): void {
   console.log('  GitLab token:            ' + (creds.gitlabToken ? 'set' : 'not set'));
   console.log('  Azure DevOps token:      ' + (creds.azureToken ? 'set' : 'not set'));
   console.log('  Bitbucket Server token:  ' + (creds.bitbucketServerToken ? 'set' : 'not set'));
-  console.log('  Bitbucket Cloud auth:    env vars only, not shown here (see README)');
+  // Shown as one line: Basic auth needs both halves, so one alone is useless.
+  const bbUser = creds.bitbucketCloudUsername;
+  const bbToken = creds.bitbucketCloudPassword;
+  const bbState = bbUser && bbToken
+    ? `set (${bbUser})`
+    : bbUser || bbToken
+      ? 'INCOMPLETE — needs both email and token'
+      : 'not set';
+  console.log('  Bitbucket Cloud auth:    ' + bbState);
   // Reports rather than throws on a retired name — status should still be
   // readable when the stored region is what needs fixing.
   const stored = config.defaults?.region;

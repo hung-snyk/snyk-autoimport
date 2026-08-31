@@ -60,6 +60,42 @@ export interface ErrorDetail {
 }
 
 /**
+ * Reduce an error message to something safe and short to print.
+ *
+ * `snyk-request-manager` wraps failures in an error whose `message` is the
+ * *inspected* underlying axios error — which includes the outgoing request
+ * headers, and therefore `Authorization: token <the real token>`. Printing
+ * that message verbatim would leak the credential into a terminal, a CI log,
+ * or a pasted bug report.
+ *
+ * So: first line only, then redact anything that looks like a credential even
+ * if it appears there.
+ */
+function safeMessage(raw: string): string {
+  const firstLine = raw.split('\n')[0].trim();
+  return (
+    firstLine
+      // A header value runs to the end of the line (or its closing quote), and
+      // can itself contain a space — "token abc", "Bearer abc". Matching only
+      // the next word would redact the scheme and leave the secret.
+      .replace(
+        /((?:authorization|private-token|x-api-key)\s*[:=]\s*['"]?)[^\n'"]*/gi,
+        '$1<redacted>',
+      )
+      // A scheme-prefixed credential with no header name around it.
+      .replace(/\b(token|bearer|basic)\s+[A-Za-z0-9._~+/=-]+/gi, '$1 <redacted>')
+  );
+}
+
+/** A JSON:API error entry, which is how Snyk reports the status on a failure. */
+interface JsonApiError {
+  status?: string | number;
+  detail?: string;
+  details?: string;
+  title?: string;
+}
+
+/**
  * Extract status, a human-meaningful message, and the Snyk request id from a
  * thrown error.
  *
@@ -71,18 +107,32 @@ export function describeError(error: unknown): ErrorDetail {
     message?: string;
     status?: number;
     statusCode?: number;
-    data?: { message?: string; code?: number };
+    data?: { message?: string; code?: number; errors?: JsonApiError[] };
     response?: {
       status?: number;
       statusCode?: number;
       headers?: Record<string, string | undefined>;
-      data?: { message?: string } | string;
+      data?: { message?: string; errors?: JsonApiError[] } | string;
     };
   };
 
   const res = err?.response;
+  // The wrapped request-manager error carries neither `status` nor `response`;
+  // its only structured signal is a JSON:API errors array on `data`, whose
+  // status is a *string*.
+  const jsonApi =
+    err?.data?.errors?.[0] ??
+    (typeof res?.data === 'object' ? res?.data?.errors?.[0] : undefined);
+  const jsonApiStatus =
+    jsonApi?.status === undefined ? undefined : Number(jsonApi.status);
+
   const status =
-    err?.data?.code ?? err?.status ?? err?.statusCode ?? res?.status ?? res?.statusCode;
+    err?.data?.code ??
+    err?.status ??
+    err?.statusCode ??
+    res?.status ??
+    res?.statusCode ??
+    (Number.isFinite(jsonApiStatus) ? jsonApiStatus : undefined);
 
   const headers = res?.headers ?? {};
   const requestId =
@@ -92,10 +142,16 @@ export function describeError(error: unknown): ErrorDetail {
     (typeof res?.data === 'object' ? res?.data?.message : undefined) ??
     (typeof res?.data === 'string' ? res.data : undefined);
 
-  const message =
-    err?.data?.message ?? bodyMessage ?? err?.message ?? 'Unknown error';
+  const raw =
+    err?.data?.message ??
+    jsonApi?.detail ??
+    jsonApi?.details ??
+    jsonApi?.title ??
+    bodyMessage ??
+    err?.message ??
+    'Unknown error';
 
-  return { status, message, requestId };
+  return { status, message: safeMessage(raw), requestId };
 }
 
 /** One-line summary suitable for showing a user, e.g. "401: Invalid auth". */

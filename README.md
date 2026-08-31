@@ -146,7 +146,7 @@ Manages locally stored credentials.
 
 | Command | Description |
 |---|---|
-| `auth login` | Asks for the Snyk API token, which source you import from, that source's token, and the Snyk region. Requires an interactive terminal. |
+| `auth login` | Asks for the Snyk region, the Snyk API token (verified before continuing), which source you import from, and that source's credential. Requires an interactive terminal. |
 | `auth status` | Shows the configuration file path, which credentials are set, and the configured region. Token values are never printed. |
 | `auth logout` | Removes stored credentials. |
 
@@ -154,7 +154,10 @@ Manages locally stored credentials.
 only paste the credential you actually need:
 
 ```text
+Region — snyk-us-01 / snyk-us-02 / snyk-eu-01 / snyk-au-01 [current: snyk-us-01]:
+
 Snyk API token: ***
+  Checking token... ✓ valid (6 organizations visible)
 
 Which source will you import from?
   [1] github
@@ -170,13 +173,19 @@ Pick one (1-8 or name): 4
 GitLab token: ***
 ```
 
+The region is asked first because the token is verified against that region's
+API — a token valid in SNYK-EU-01 returns `401` against the US host, so asking
+afterwards would make a correct token look broken. The check runs before you
+are asked for anything else, so a mistyped or expired token surfaces here
+rather than part-way through an import.
+
 Select the source by number or by its exact `--source` name; anything else is
 rejected and re-prompted. Typed tokens are masked, and a prompt left blank keeps
 whatever is already stored, so you can re-run the command to change one value.
 Run it again to add a second source's token.
 
-Selecting either Bitbucket Cloud source stores nothing, because their three
-authentication methods are read from environment variables — see
+Selecting either Bitbucket Cloud source asks for two values rather than one,
+because Bitbucket authenticates over HTTP Basic — see
 [Bitbucket Cloud authentication](#bitbucket-cloud-authentication).
 
 ### `integrations`
@@ -262,19 +271,31 @@ means a real import against a live instance, not test coverage alone.
 ### Bitbucket Cloud authentication
 
 Both Bitbucket Cloud sources (`bitbucket-cloud` and `bitbucket-connect-app`)
-use the same credentials for repository discovery. Bitbucket Cloud supports
-three authentication methods, so it is configured through environment variables
-rather than `auth login`:
+use the same credentials for repository discovery.
 
-| Method | Environment variables |
+The usual choice is HTTP Basic auth, which `auth login` stores for you. It takes
+two values — an identity and a secret — in either of these pairings:
+
+| Identity | Secret |
 |---|---|
-| Username and app password | `BITBUCKET_CLOUD_USERNAME`, `BITBUCKET_CLOUD_PASSWORD` |
-| API token | `BITBUCKET_CLOUD_API_TOKEN` |
-| OAuth token | `BITBUCKET_CLOUD_OAUTH_TOKEN` |
+| Atlassian account **email** | **API token** (Atlassian account settings → Security → API tokens) |
+| Bitbucket **username** | **App password** (Personal settings → App passwords, scope `Repositories: Read`) |
 
-Methods are resolved in the order listed above. Set
-`BITBUCKET_CLOUD_AUTH_METHOD` to `user`, `api`, or `oauth` to force a specific
-method when more than one is configured.
+Note the email pairs with an API token and the username pairs with an app
+password; crossing them over fails. Either pairing is stored as
+`BITBUCKET_CLOUD_USERNAME` and `BITBUCKET_CLOUD_PASSWORD`.
+
+Two Bearer-token methods are also accepted, from environment variables only,
+since they are short-lived or narrowly scoped and not worth persisting:
+
+| Method | Environment variable |
+|---|---|
+| Workspace / project / repository access token | `BITBUCKET_CLOUD_API_TOKEN` |
+| OAuth access token | `BITBUCKET_CLOUD_OAUTH_TOKEN` |
+
+Methods resolve in the order Basic → access token → OAuth. Set
+`BITBUCKET_CLOUD_AUTH_METHOD` to `user`, `api`, or `oauth` to force one when
+more than one is configured.
 
 ## Regions
 
