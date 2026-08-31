@@ -90,36 +90,28 @@ export async function listIntegrationsMap(
 /**
  * Explain a missing integration, for the org the user actually named.
  *
- * Two different problems with two different fixes, so they get two different
- * messages: an org with other SCM integrations usually means the wrong
- * `--source` was passed, while an org with none needs a setup step in Snyk
- * that this tool cannot perform.
+ * Deliberately does NOT list the org's other integrations or suggest one.
+ * Someone running this has a source in mind; offering to import from a
+ * different one instead invites importing the wrong repositories into the
+ * wrong place. The fix is always the same — connect it in Snyk — so the
+ * message says only that.
  *
- * `usableSources` is passed in rather than derived here so this stays free of
- * a dependency on the source registry — an org's integration list also
- * contains things this tool cannot import through (cli, kubernetes, docker-hub),
- * and suggesting those would be worse than saying nothing.
+ * `sourceLabel` is passed in rather than looked up, keeping this free of a
+ * dependency on the source registry.
  */
 export function describeMissingIntegration(
   orgLabel: string,
   source: string,
-  usableSources: readonly string[],
+  sourceLabel: string,
 ): string {
-  if (usableSources.length > 0) {
-    return (
-      `Org ${orgLabel} has no "${source}" integration configured.\n\n` +
-      `It does have: ${usableSources.join(', ')}.\n` +
-      `Re-run with one of those, e.g. --source ${usableSources[0]}.`
-    );
-  }
   return (
-    `Org ${orgLabel} has no SCM integration configured at all, so there is ` +
-    'nothing to import through.\n\n' +
-    'This is set up in Snyk, not here:\n' +
+    `Org ${orgLabel} has no "${source}" integration configured.\n\n` +
+    'Configure it in Snyk first, then try again:\n' +
     '  1. Open the organization in https://app.snyk.io\n' +
-    '  2. Settings → Integrations → connect your SCM\n' +
+    `  2. Settings → Integrations → connect ${sourceLabel}\n` +
     '  3. Re-run this command\n\n' +
-    'Run `snyk-autoimport integrations --snyk-org "<name>"` to check another org.'
+    'Run `snyk-autoimport integrations --snyk-org "<name>"` to see what an ' +
+    'organization currently has.'
   );
 }
 

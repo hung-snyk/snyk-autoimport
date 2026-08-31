@@ -25,6 +25,14 @@ export const GITHUB_CLOUD_APP_SOURCE = 'github-cloud-app';
 export type TokenRequirement = { envVar: string } | { special: 'bitbucket-cloud' };
 
 export interface SourceDef {
+  /**
+   * How Snyk names this integration in its own UI. Shown wherever a human
+   * reads the list, while the key stays the value passed to --source and sent
+   * on the wire — "bitbucket-connect-app" is presented as "Bitbucket Cloud
+   * App", which is what someone looking at the Snyk platform will be trying to
+   * match up.
+   */
+  label: string;
   dedupType: SnykProjectOrigin;
   requiresSourceUrl: boolean;
   token: TokenRequirement;
@@ -32,36 +40,43 @@ export interface SourceDef {
 
 export const SOURCES: Record<string, SourceDef> = {
   github: {
+    label: 'GitHub',
     dedupType: SnykProjectOrigin.GITHUB,
     requiresSourceUrl: false,
     token: { envVar: 'GITHUB_TOKEN' },
   },
   [GITHUB_CLOUD_APP_SOURCE]: {
+    label: 'GitHub Cloud App',
     dedupType: SnykProjectOrigin.GITHUB_CLOUD_APP,
     requiresSourceUrl: false,
     token: { envVar: 'GITHUB_TOKEN' },
   },
   'github-enterprise': {
+    label: 'GitHub Enterprise',
     dedupType: SnykProjectOrigin.GHE,
     requiresSourceUrl: true, // getGithubBaseUrl silently defaults to public GitHub otherwise
     token: { envVar: 'GITHUB_TOKEN' },
   },
   gitlab: {
+    label: 'GitLab',
     dedupType: SnykProjectOrigin.GITLAB,
     requiresSourceUrl: false, // safe default: gitlab.com
     token: { envVar: 'GITLAB_TOKEN' },
   },
   'azure-repos': {
+    label: 'Azure Repos',
     dedupType: SnykProjectOrigin.AZURE_REPOS,
     requiresSourceUrl: false, // safe default: dev.azure.com
     token: { envVar: 'AZURE_TOKEN' },
   },
   'bitbucket-server': {
+    label: 'Bitbucket Server',
     dedupType: SnykProjectOrigin.BITBUCKET_SERVER,
     requiresSourceUrl: true, // no public default host exists for self-hosted Bitbucket Server
     token: { envVar: 'BITBUCKET_SERVER_TOKEN' },
   },
   'bitbucket-cloud': {
+    label: 'Bitbucket Cloud',
     dedupType: SnykProjectOrigin.BITBUCKET_CLOUD,
     requiresSourceUrl: false, // fixed host: api.bitbucket.org
     token: { special: 'bitbucket-cloud' },
@@ -73,6 +88,7 @@ export const SOURCES: Record<string, SourceDef> = {
    * listed. Only the Snyk-side integration key and project origin differ.
    */
   'bitbucket-connect-app': {
+    label: 'Bitbucket Cloud App',
     dedupType: SnykProjectOrigin.BITBUCKET_CONNECT_APP,
     requiresSourceUrl: false,
     token: { special: 'bitbucket-cloud' },

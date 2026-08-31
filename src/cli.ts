@@ -116,8 +116,10 @@ async function promptForSource(): Promise<string> {
   const names = Object.keys(SOURCES);
   console.log('\nWhich source will you import from?');
   names.forEach((name, i) => {
+    // Snyk's own name for it, then the --source value, since the two differ
+    // for the App integrations and users are matching against the Snyk UI.
     const note = REQUIRES_SOURCE_URL.has(name) ? '  (needs --source-url)' : '';
-    console.log(`  [${i + 1}] ${name}${note}`);
+    console.log(`  [${i + 1}] ${SOURCES[name].label.padEnd(18)} --source ${name}${note}`);
   });
 
   for (;;) {
@@ -548,11 +550,10 @@ async function importCmd(args: ImportArgs): Promise<void> {
     // Two different problems with two different fixes: an org with other
     // integrations usually means the wrong --source was passed, while an org
     // with none needs a setup step in Snyk that this tool cannot perform.
-    // Only suggest sources this tool can actually import through: an org's
-    // integration list also holds cli, kubernetes, docker-hub and the like.
-    const usable = Object.keys(available).filter((name) => SOURCES[name]);
     const label = org.name === org.id ? org.id : `"${org.name}"`;
-    throw new Error(describeMissingIntegration(label, args.source, usable));
+    throw new Error(
+      describeMissingIntegration(label, args.source, SOURCES[args.source].label),
+    );
   }
   console.log(`✓ Using ${args.source} integration ${integrationId}`);
 
@@ -655,7 +656,8 @@ async function integrationsCmd(args: {
     return;
   }
   for (const [type, id] of entries) {
-    const usable = SOURCES[type] ? '  ← usable as --source ' + type : '';
+    const def = SOURCES[type];
+    const usable = def ? `  ← ${def.label}, usable as --source ${type}` : '';
     console.log(`  ${type}: ${id}${usable}`);
   }
 }

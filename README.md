@@ -165,14 +165,14 @@ Snyk API token: ***
   Checking token... ✓ valid (6 organizations visible)
 
 Which source will you import from?
-  [1] github
-  [2] github-cloud-app
-  [3] github-enterprise  (needs --source-url)
-  [4] gitlab
-  [5] azure-repos
-  [6] bitbucket-server  (needs --source-url)
-  [7] bitbucket-cloud
-  [8] bitbucket-connect-app
+  [1] GitHub             --source github
+  [2] GitHub Cloud App   --source github-cloud-app
+  [3] GitHub Enterprise  --source github-enterprise  (needs --source-url)
+  [4] GitLab             --source gitlab
+  [5] Azure Repos        --source azure-repos
+  [6] Bitbucket Server   --source bitbucket-server  (needs --source-url)
+  [7] Bitbucket Cloud    --source bitbucket-cloud
+  [8] Bitbucket Cloud App  --source bitbucket-connect-app
 Pick one (1-8 or name): 4
 
 GitLab token: ***
@@ -238,11 +238,11 @@ Discovers repositories in the specified source organization, removes those
 already imported, submits the remainder, and prints a summary.
 
 The `--source` you pass must be configured on the target organization. If it is
-not, the command stops before discovering anything and distinguishes the two
-causes: an organization with other SCM integrations lists them and suggests one
-(usually the wrong `--source` was passed), while an organization with none is
-pointed at the Snyk UI, since connecting an integration is a Snyk-side action.
-`integrations` shows what any organization has.
+not, the command stops before discovering anything and tells you to connect it
+in Snyk, naming the integration as the Snyk UI names it. It deliberately does
+not offer to import from one of the organization's other integrations instead —
+that would risk importing the wrong repositories into the wrong place. Use
+`integrations` to see what an organization has.
 
 | Flag | Description |
 |---|---|
@@ -261,16 +261,19 @@ Verification status is stated per source, because it is the most useful thing to
 know before pointing this at a production organization. "Verified end to end"
 means a real import against a live instance, not test coverage alone.
 
-| `--source` | Discovery credential | `--source-url` | Verification status |
-|---|---|---|---|
-| `github-cloud-app` | `GITHUB_TOKEN` | Not required | Verified end to end |
-| `github` | `GITHUB_TOKEN` | Not required | Verified end to end |
-| `azure-repos` | `AZURE_TOKEN` | Optional (defaults to dev.azure.com) | Verified end to end |
-| `github-enterprise` | `GITHUB_TOKEN` | **Required** | Implemented and unit-tested; not exercised against a live instance |
-| `gitlab` | `GITLAB_TOKEN` | Optional (defaults to gitlab.com) | Implemented and unit-tested; not exercised against a live instance |
-| `bitbucket-server` | `BITBUCKET_SERVER_TOKEN` | **Required** | Implemented and unit-tested; not exercised against a live instance |
-| `bitbucket-cloud` | See [below](#bitbucket-cloud-authentication) | Not required | Implemented and unit-tested; not exercised against a live instance |
-| `bitbucket-connect-app` | See [below](#bitbucket-cloud-authentication) | Not required | Deduplication verified live; discovery and import not yet verified |
+Each row shows the `--source` value alongside the name Snyk's own UI uses,
+since the two differ for the App integrations.
+
+| `--source` | Snyk UI name | Discovery credential | `--source-url` | Verification status |
+|---|---|---|---|---|
+| `github-cloud-app` | GitHub Cloud App | `GITHUB_TOKEN` | Not required | Verified end to end |
+| `github` | GitHub | `GITHUB_TOKEN` | Not required | Verified end to end |
+| `azure-repos` | Azure Repos | `AZURE_TOKEN` | Optional (defaults to dev.azure.com) | Verified end to end |
+| `github-enterprise` | GitHub Enterprise | `GITHUB_TOKEN` | **Required** | Implemented and unit-tested; not exercised against a live instance |
+| `gitlab` | GitLab | `GITLAB_TOKEN` | Optional (defaults to gitlab.com) | Implemented and unit-tested; not exercised against a live instance |
+| `bitbucket-server` | Bitbucket Server | `BITBUCKET_SERVER_TOKEN` | **Required** | Implemented and unit-tested; not exercised against a live instance |
+| `bitbucket-cloud` | Bitbucket Cloud | See [below](#bitbucket-cloud-authentication) | Not required | Discovery and deduplication verified live; import not yet verified |
+| `bitbucket-connect-app` | Bitbucket Cloud App | See [below](#bitbucket-cloud-authentication) | Not required | Deduplication verified live; discovery shares the verified `bitbucket-cloud` path; import not yet verified |
 
 ### Provider-specific notes
 
@@ -289,9 +292,9 @@ means a real import against a live instance, not test coverage alone.
   automatically; you do not name projects individually.
 - **`bitbucket-cloud` vs `bitbucket-connect-app`** — Both are Bitbucket Cloud
   and both take a workspace as `--source-org`; they differ only in how Snyk is
-  connected. `bitbucket-connect-app` is Snyk's Connect App integration and is
-  what a recently-connected Bitbucket Cloud organization will have; the older
-  `bitbucket-cloud` is the username/app-password integration. Run
+  connected. `bitbucket-connect-app` is the one Snyk shows as **Bitbucket Cloud
+  App**, and is what a recently-connected Bitbucket Cloud organization will
+  have; `bitbucket-cloud` is the older username/app-password integration. Run
   `integrations` to see which one your organization has — passing the wrong one
   fails with "integration not configured".
 - **`bitbucket-server`** — `--source-org` is the Bitbucket project **name**.
@@ -440,8 +443,8 @@ Snyk takes to scan every submitted repository. `CONCURRENT_IMPORTS` (default
 ## Known limitations
 
 - **Several providers are not fully verified against live instances** —
-  `gitlab`, `bitbucket-server`, `bitbucket-cloud`, `bitbucket-connect-app`, and
-  `github-enterprise`. They are implemented and covered by the maintainers'
+  `gitlab`, `bitbucket-server`, `github-enterprise`, and the import step for
+  both Bitbucket Cloud sources. They are implemented and covered by the maintainers'
   tests, but have not been exercised end to end against a real server. See
   [Supported sources](#supported-sources) for the status of each.
 - **Repositories with no supported manifests** produce no Snyk project, so they
