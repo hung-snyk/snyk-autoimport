@@ -802,8 +802,7 @@ async function main(): Promise<void> {
           .option('source', {
             type: 'string',
             describe:
-              'SCM source: github | github-cloud-app | github-enterprise | gitlab | ' +
-              'azure-repos | bitbucket-server | bitbucket-cloud. ' +
+              `SCM source: ${Object.keys(SOURCES).join(' | ')}. ` +
               'Required — never guessed, since an org may have more than one configured. ' +
               'Run the `integrations` command first if unsure.',
           })
@@ -815,7 +814,10 @@ async function main(): Promise<void> {
             describe: 'Org/group/project/workspace to import from, within --source',
           })
           .option('region', { type: 'string', describe: REGION_DESCRIBE })
-          .option('source-url', { type: 'string', describe: 'Self-hosted host URL (required for github-enterprise and bitbucket-server)' })
+          .option('source-url', {
+            type: 'string',
+            describe: `Self-hosted host URL (required for ${[...REQUIRES_SOURCE_URL].join(' and ')})`,
+          })
           .option('yes', { type: 'boolean', default: false, describe: 'Skip confirmation (for CI)' })
           .option('dry-run', { type: 'boolean', default: false, describe: 'Show the plan; create nothing' }),
       (a) => {
