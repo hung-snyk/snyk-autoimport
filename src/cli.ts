@@ -59,7 +59,13 @@ import { discoverBitbucketServerTargets } from './discover-bitbucket-server';
 import { discoverBitbucketCloudTargets } from './discover-bitbucket-cloud';
 import { filterAlreadyImported } from './dedup';
 import { runImport, mergeOutcomes } from './importer';
-import { SOURCES, REQUIRES_SOURCE_URL, KNOWN_UNSUPPORTED, GITHUB_CLOUD_APP_SOURCE } from './sources';
+import {
+  SOURCES,
+  REQUIRES_SOURCE_URL,
+  ACCEPTS_SOURCE_URL,
+  KNOWN_UNSUPPORTED,
+  GITHUB_CLOUD_APP_SOURCE,
+} from './sources';
 import { printSummary } from './report';
 import { describeTarget } from './target-format';
 import { ask, askSecret, confirm, isInteractive } from './prompt';
@@ -118,31 +124,53 @@ function usesBitbucketServerAuth(source: string): boolean {
   return 'special' in token && token.special === 'bitbucket-server';
 }
 
-/** Example host shown when a self-hosted source has no URL stored yet. */
+/** Example host shown when a self-hostable source has no URL stored yet. */
 const URL_EXAMPLES: Record<string, string> = {
   'github-enterprise': 'https://github.example.com',
   'bitbucket-server': 'https://bitbucket.example.com',
+  gitlab: 'https://gitlab.example.com',
 };
 
 /**
- * Ask for and store a self-hosted source's URL.
+ * The public host used when a source that allows one is left blank. Display
+ * only — the real defaults live in each scm/ module's base-url helper, and
+ * this must not become a second place they are decided.
+ */
+const DEFAULT_HOST_LABELS: Record<string, string> = {
+  gitlab: 'gitlab.com',
+};
+
+/**
+ * Ask for and store a self-hostable source's URL.
  *
  * Stored rather than passed every time: a customer's host never changes, and
  * requiring --source-url on every import was friction with no safety benefit —
  * a wrong host fails loudly at discovery either way. The flag still overrides
  * this for a one-off run.
+ *
+ * A source with a real public default (GitLab) may be left blank, and that is
+ * a valid answer rather than a skipped step. One with no default (GitHub
+ * Enterprise, Bitbucket Server) may not, since there would be nothing to fall
+ * back on.
  */
 async function promptSourceUrl(source: string): Promise<void> {
-  const label = SOURCES[source].label;
+  const { label, requiresSourceUrl } = SOURCES[source];
   const current = storedSourceUrl(source);
-  const hint = current ? ` [current: ${current}]` : ` (e.g. ${URL_EXAMPLES[source] ?? 'https://scm.example.com'})`;
+  const example = URL_EXAMPLES[source] ?? 'https://scm.example.com';
+  const fallback = DEFAULT_HOST_LABELS[source];
 
-  const url = await ask(`\n${label} URL${hint}: `);
+  const hint = current
+    ? `[current: ${current} — blank keeps it]`
+    : requiresSourceUrl
+      ? `(e.g. ${example})`
+      : `(e.g. ${example}) [blank for ${fallback ?? 'the public host'}]`;
+
+  const url = await ask(`\n${label} URL ${hint}: `);
   if (url) {
     setSourceUrl(source, url.trim());
     return;
   }
-  if (!current) {
+  if (!current && requiresSourceUrl) {
     throw new Error(
       `${label} is self-hosted, so it needs its URL — there is no default host to fall back on.`,
     );
@@ -369,9 +397,11 @@ async function authLogin(): Promise<void> {
   //    it exactly; that is where a missing integration should fail.
   const source = await promptForSource();
 
-  // 4. A self-hosted source needs its host before its credential — and the
-  //    credential check below cannot run without it either.
-  if (REQUIRES_SOURCE_URL.has(source)) {
+  // 4. A self-hostable source is asked for its host before its credential,
+  //    because the credential check below is run against that host: a token
+  //    issued by a self-managed instance is rejected by the vendor's public
+  //    one, so checking the wrong server would fail a working credential.
+  if (ACCEPTS_SOURCE_URL.has(source)) {
     await promptSourceUrl(source);
   }
 

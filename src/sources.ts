@@ -37,6 +37,17 @@ export interface SourceDef {
   label: string;
   dedupType: SnykProjectOrigin;
   requiresSourceUrl: boolean;
+  /**
+   * The source has a safe public default host but can ALSO be self-hosted, so
+   * a host is worth storing when there is one. Distinct from
+   * `requiresSourceUrl`, where there is no default to fall back on and a
+   * missing host is a hard error: here a blank answer is a valid choice.
+   *
+   * This is what tells `auth login` to offer the question at all — and the
+   * credential check needs the answer, since verifying a self-hosted token
+   * against the public host reports a working credential as broken.
+   */
+  optionalSourceUrl?: boolean;
   token: TokenRequirement;
 }
 
@@ -63,12 +74,17 @@ export const SOURCES: Record<string, SourceDef> = {
     label: 'GitLab',
     dedupType: SnykProjectOrigin.GITLAB,
     requiresSourceUrl: false, // safe default: gitlab.com
+    optionalSourceUrl: true, // ...but self-managed GitLab is common
     token: { envVar: 'GITLAB_TOKEN' },
   },
   'azure-repos': {
     label: 'Azure Repos',
     dedupType: SnykProjectOrigin.AZURE_REPOS,
     requiresSourceUrl: false, // safe default: dev.azure.com
+    // Azure DevOps Server is self-hostable too and `azureBaseUrl` accepts a
+    // host, so this could take optionalSourceUrl as well. Left off until
+    // someone can check the on-prem URL shape (collection paths differ) —
+    // offering a prompt whose answer we cannot validate is worse than none.
     token: { envVar: 'AZURE_TOKEN' },
   },
   'bitbucket-server': {
@@ -98,9 +114,22 @@ export const SOURCES: Record<string, SourceDef> = {
   },
 };
 
+/** Sources with no safe default host, where a missing URL is a hard error. */
 export const REQUIRES_SOURCE_URL = new Set(
   Object.entries(SOURCES)
     .filter(([, def]) => def.requiresSourceUrl)
+    .map(([source]) => source),
+);
+
+/**
+ * Sources `auth login` asks for a host: the ones that must have one, plus the
+ * ones that default safely but can be self-hosted. Everything else is
+ * single-host by definition (github.com, api.bitbucket.org), so asking would
+ * only invite a wrong answer.
+ */
+export const ACCEPTS_SOURCE_URL = new Set(
+  Object.entries(SOURCES)
+    .filter(([, def]) => def.requiresSourceUrl || def.optionalSourceUrl)
     .map(([source]) => source),
 );
 

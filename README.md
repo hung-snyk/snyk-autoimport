@@ -54,7 +54,7 @@ snyk-autoimport` to remove). Examples below use `snyk-autoimport`; substitute
 
 | Command | Description |
 |---|---|
-| `auth login` | Asks for your region, Snyk token, source, and that source's credential, checking each against a live API. Self-hosted sources are also asked for their server URL, which is stored. One source at a time — run it again to add another. Requires an interactive terminal. |
+| `auth login` | Asks for your region, Snyk token, source, and that source's credential, checking each against a live API. Sources that can be self-hosted are also asked for their server URL, which is stored and reused — required for GitHub Enterprise and Bitbucket Server, optional for GitLab (blank uses gitlab.com). The credential is checked against that host, so a self-managed token is verified where it is actually valid. One source at a time — run it again to add another. Requires an interactive terminal. |
 | `auth status` | Shows the config path, which credentials are set, and the region. Token values are never printed. |
 | `auth logout` | Clears everything stored: credentials, region and any saved server URLs. |
 | `integrations --snyk-org "<name>"` | Lists the SCM integrations configured on an organization, with the `--source` value for each. Use it when unsure which to pass — an organization can have several from the same family, and `github` and `github-cloud-app` behave differently. |
@@ -68,7 +68,7 @@ snyk-autoimport` to remove). Examples below use `snyk-autoimport`; substitute
 | `--snyk-org-id` | Organization UUID. Skips name resolution; recommended for automation. |
 | `--source` | **Required.** Never inferred, because one organization may have several integrations of the same family. |
 | `--source-org` | The organization, group, workspace or project to import from, depending on the provider. `--github-org` is an accepted alias. |
-| `--source-url` | Host for self-hosted providers. Only needed if `auth login` has not stored it. |
+| `--source-url` | Host for self-hosted providers (GitHub Enterprise, Bitbucket Server, self-managed GitLab). Only needed if `auth login` has not stored it, or to override the stored one for a single run. |
 | `--region` | Overrides the stored region. |
 | `--dry-run` | Show what would be imported and exit, changing nothing. |
 | `--yes` | Skip the confirmation prompt. Required for non-interactive use. |

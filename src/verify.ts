@@ -5,13 +5,20 @@
  * check hits the lightest endpoint that proves the credential is accepted, and
  * where possible one that exercises the same permission discovery needs.
  *
+ * A self-hostable source is checked against the host `auth login` stored for
+ * it, never a guessed one. Which server answers is part of what is being
+ * tested: a token is only valid on the instance that issued it, so checking a
+ * self-managed credential against the vendor's public host reports a working
+ * token as rejected.
+ *
  * Some sources genuinely cannot be checked at this stage, and say so rather
- * than guessing: the self-hosted ones need a host that is only supplied at
- * import time (`--source-url`), and an Azure PAT scoped to Code alone is
- * rejected by every account-level endpoint, so a failure there would say
- * nothing about whether discovery will work.
+ * than guessing: the ones with no default host are skipped until a URL is
+ * stored, and an Azure PAT scoped to Code alone is rejected by every
+ * account-level endpoint, so a failure there would say nothing about whether
+ * discovery will work.
  */
 import { githubBaseUrl } from './scm/github';
+import { gitlabBaseUrl } from './scm/gitlab';
 import { getBitbucketCloudAuth } from './scm/bitbucket-cloud';
 import { bitbucketServerAuthHeader } from './scm/bitbucket-server';
 import { basicAuth, scmGet, ScmError } from './scm/http';
@@ -47,17 +54,28 @@ async function verifyGithub(token: string, host?: string): Promise<VerifyResult>
   return { status: 'ok', detail: body.login ? `authenticated as ${body.login}` : 'accepted' };
 }
 
-async function verifyGitlab(token: string): Promise<VerifyResult> {
+/**
+ * Checked against the host the token actually belongs to.
+ *
+ * GitLab defaults safely to gitlab.com, but self-managed instances are common,
+ * and a token issued by one is meaningless to the other. Hardcoding gitlab.com
+ * here reported a perfectly good self-managed token as rejected (401) and told
+ * the user to go find a different one — the same wrong-turn this file's
+ * 401-versus-403 rule exists to prevent, arriving by a different route.
+ *
+ * The host is echoed back in the detail line so it is visible which server
+ * answered, rather than left to be assumed.
+ */
+async function verifyGitlab(token: string, host?: string): Promise<VerifyResult> {
+  const baseUrl = gitlabBaseUrl(host);
   const { body } = await scmGet<{ username?: string }>(
-    'https://gitlab.com/api/v4/user',
+    `${baseUrl}/api/v4/user`,
     { 'private-token': token },
     'GitLab credential check',
     { maxAttempts: 2 },
   );
-  return {
-    status: 'ok',
-    detail: body.username ? `authenticated as ${body.username}` : 'accepted',
-  };
+  const who = body.username ? `authenticated as ${body.username}` : 'accepted';
+  return { status: 'ok', detail: host ? `${who} at ${baseUrl}` : who };
 }
 
 /**
@@ -106,8 +124,7 @@ async function verifyBitbucketCloud(): Promise<VerifyResult> {
  * to fall back on, so without a stored host this is skipped rather than
  * guessed at.
  */
-async function verifyBitbucketServer(): Promise<VerifyResult> {
-  const host = storedSourceUrl('bitbucket-server');
+async function verifyBitbucketServer(host?: string): Promise<VerifyResult> {
   if (!host) {
     return {
       status: 'skipped',
@@ -129,9 +146,23 @@ async function verifyBitbucketServer(): Promise<VerifyResult> {
   };
 }
 
-export async function verifyScmCredential(source: string): Promise<VerifyResult> {
+/**
+ * `hostOverride` stands in for the stored host. It exists so tests can exercise
+ * the self-hosted paths without calling `setSourceUrl`, which would write a
+ * fake host into the real credential file — see the note in config.ts. Callers
+ * in normal use omit it and get whatever `auth login` stored.
+ */
+export async function verifyScmCredential(
+  source: string,
+  hostOverride?: string,
+): Promise<VerifyResult> {
   const skip = UNVERIFIABLE[source];
   if (skip) return { status: 'skipped', reason: skip };
+
+  // Only consulted by the sources that can be self-hosted. github.com and
+  // api.bitbucket.org are single-host, so they deliberately ignore it: a host
+  // stored against those could only ever be wrong.
+  const host = hostOverride ?? storedSourceUrl(source);
 
   try {
     switch (source) {
@@ -141,7 +172,6 @@ export async function verifyScmCredential(source: string): Promise<VerifyResult>
       case 'github-enterprise': {
         // Self-hosted, so there is no endpoint to fall back on: without a
         // stored host, guessing one would test the wrong server entirely.
-        const host = storedSourceUrl('github-enterprise');
         if (!host) {
           return {
             status: 'skipped',
@@ -152,12 +182,14 @@ export async function verifyScmCredential(source: string): Promise<VerifyResult>
         return await verifyGithub(process.env.GITHUB_TOKEN ?? '', host);
       }
       case 'gitlab':
-        return await verifyGitlab(process.env.GITLAB_TOKEN ?? '');
+        // Unlike the two above, a missing host is not a gap — gitlab.com is a
+        // real default — so this checks rather than skips.
+        return await verifyGitlab(process.env.GITLAB_TOKEN ?? '', host);
       case 'bitbucket-cloud':
       case 'bitbucket-connect-app':
         return await verifyBitbucketCloud();
       case 'bitbucket-server':
-        return await verifyBitbucketServer();
+        return await verifyBitbucketServer(host);
       default:
         return { status: 'skipped', reason: 'no check implemented for this source' };
     }
