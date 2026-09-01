@@ -1,28 +1,23 @@
 /**
  * Bridge stored config -> process.env.
  *
- * Everything downstream reads its configuration from env vars: SCM discovery
- * takes `GITHUB_TOKEN` / `GITLAB_TOKEN` / `AZURE_TOKEN` /
- * `BITBUCKET_SERVER_TOKEN`, `snyk-request-manager` takes `SNYK_TOKEN` and
- * `SNYK_API`, the import paces itself with `CONCURRENT_IMPORTS`, and the
- * still-borrowed dedup helper requires `SNYK_LOG_PATH`. The whole point of
- * this tool is that the user never sets those by hand — we populate them here
- * from the credential store.
+ * Everything downstream reads its configuration from env vars: each `scm/`
+ * module reads its provider's credential vars, `snyk-request-manager` takes
+ * `SNYK_TOKEN` and `SNYK_API`, and the import paces itself with
+ * `CONCURRENT_IMPORTS`. The whole point of this tool is that the user never
+ * sets those by hand — we publish them here from the credential store.
+ *
+ * Which vars get published is not listed here on purpose: it is exactly
+ * `CREDENTIAL_ENV_VARS` in config.ts, and every stored credential — including
+ * the Bitbucket Cloud and Bitbucket Server username/password pairs — goes
+ * through the same loop. Bitbucket Cloud's Bearer methods (OAuth and workspace
+ * access tokens) are the only credentials with no stored form; those are
+ * env-var only and read directly by `scm/bitbucket-cloud.ts`.
  *
  * Precedence: a value already present in the real environment always wins,
  * so CI pipelines can inject secrets the normal way and ignore the store.
- *
- * Bitbucket Cloud is NOT bridged here — its 3-method auth is read directly
- * from its own 4 env vars by `discover-bitbucket-cloud.ts`, never persisted
- * through this store. See config.ts's Credentials type for why.
  */
-import * as fs from 'fs';
-import {
-  loadConfig,
-  LOG_DIR,
-  CREDENTIAL_ENV_VARS,
-  CREDENTIAL_KEYS,
-} from './config';
+import { loadConfig, CREDENTIAL_ENV_VARS, CREDENTIAL_KEYS } from './config';
 import {
   DEFAULT_REGION,
   REGION_API_HOSTS,
@@ -55,16 +50,14 @@ function setIfAbsent(key: string, value: string | undefined): void {
 
 export interface PreparedEnv {
   snykToken: string;
-  githubToken?: string;
-  gitlabToken?: string;
-  azureToken?: string;
-  bitbucketServerToken?: string;
 }
 
 /**
- * Populate process.env from the store + region, creating the scratch log
- * directory the library requires. Throws if the Snyk token is missing, since
- * nothing downstream can work without it.
+ * Publish the store + region into process.env. Throws if the Snyk token is
+ * missing, since nothing downstream can work without it. SCM credentials are
+ * not returned: discovery and verification read them from process.env, and a
+ * per-provider return here would be one more list to keep in step with
+ * `CREDENTIAL_ENV_VARS`.
  */
 export function prepareEnv(region?: Region): PreparedEnv {
   const config = loadConfig();
@@ -76,15 +69,6 @@ export function prepareEnv(region?: Region): PreparedEnv {
   }
   setIfAbsent('SNYK_API', REGION_API_HOSTS[effectiveRegion]);
 
-  // The borrowed dedup helper's getLoggingPath() throws if SNYK_LOG_PATH is
-  // unset, and it writes there. Nothing reads those logs back — results come
-  // from return values now — so this is just scratch space, and it can go once
-  // dedup is ours too.
-  if (!process.env.SNYK_LOG_PATH) {
-    fs.mkdirSync(LOG_DIR, { recursive: true });
-    process.env.SNYK_LOG_PATH = LOG_DIR;
-  }
-
   const snykToken = process.env.SNYK_TOKEN;
   if (!snykToken) {
     throw new Error(
@@ -92,11 +76,5 @@ export function prepareEnv(region?: Region): PreparedEnv {
     );
   }
 
-  return {
-    snykToken,
-    githubToken: process.env.GITHUB_TOKEN,
-    gitlabToken: process.env.GITLAB_TOKEN,
-    azureToken: process.env.AZURE_TOKEN,
-    bitbucketServerToken: process.env.BITBUCKET_SERVER_TOKEN,
-  };
+  return { snykToken };
 }

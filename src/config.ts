@@ -125,13 +125,6 @@ const CONFIG_FILE = path.join(PROJECT_ROOT, '.snyk-autoimport.json');
 /** Where releases before this change stored credentials; still readable. */
 const LEGACY_CONFIG_FILE = path.join(paths.config, 'config.json');
 
-/**
- * Scratch directory for the underlying library's SNYK_LOG_PATH output. Left in
- * the OS cache directory: it is transient churn, not configuration, and does
- * not belong in a git working tree.
- */
-export const LOG_DIR = path.join(paths.cache, 'logs');
-
 export function configFilePath(): string {
   return CONFIG_FILE;
 }

@@ -1,11 +1,19 @@
 /**
  * Org ID validation.
  *
- * An org ID is not just an opaque label: it becomes part of a filesystem path
- * (the failed-imports log is named `<orgId>.failed-imports.log`), so a value
- * containing path separators would escape LOG_DIR. Rejecting non-UUIDs is
- * deliberate rather than sanitizing them — stripping separators out of a bad
- * value would silently read a *different* file instead of refusing.
+ * An org ID is not an opaque label: it is interpolated into API request paths
+ * (`/org/${orgId}/integrations` in snyk/integrations.ts and snyk/import.ts),
+ * and `--snyk-org-id` is user input. A value containing `/`, `..`, or `?`
+ * would change which endpoint the request reaches, with a live token attached.
+ * Requiring a UUID closes that off entirely.
+ *
+ * Rejecting is deliberate rather than sanitizing: stripping the offending
+ * characters out of a bad value would silently send the request somewhere the
+ * user did not name, instead of refusing.
+ *
+ * (This originally guarded a filesystem path — the borrowed library named a
+ * log file after the org ID. That path is gone; the request-path reason is the
+ * stronger one and was always there.)
  */
 
 /** Snyk org IDs are UUIDs, both from the API and from `--snyk-org-id`. */

@@ -1,14 +1,16 @@
 /**
- * Bitbucket Cloud discovery.
+ * Bitbucket Cloud discovery, shared by `bitbucket-cloud` and
+ * `bitbucket-connect-app` — how Snyk connects to Bitbucket does not change
+ * how Bitbucket lists repositories.
  *
- * Unlike every other source this one has three auth methods across four env
- * vars, resolved by `getBitbucketCloudAuth()` (precedence: username/app
- * password -> API token -> OAuth token), which throws a clear error if none
- * are set.
+ * Auth is resolved by `getBitbucketCloudAuth()` from env vars, with precedence
+ * username/app-password -> API token -> OAuth token, overridable via
+ * `BITBUCKET_CLOUD_AUTH_METHOD`. It throws a clear error if none are set.
  *
- * Deliberately NOT wired into `auth login` / the credential store: three auth
- * methods is real complexity that would clutter the login prompt for a source
- * not yet verified against a live account. Env vars only for now — see README.
+ * The Basic-auth pair (email or username + API token or app password) is the
+ * form `auth login` stores and `env.ts` publishes as
+ * `BITBUCKET_CLOUD_USERNAME` / `BITBUCKET_CLOUD_PASSWORD`. The Bearer methods
+ * are env-var only — see the Credentials type in config.ts for why.
  */
 import {
   listBitbucketCloudRepos,
