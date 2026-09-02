@@ -70,6 +70,7 @@ import { printSummary } from './report';
 import { describeTarget } from './target-format';
 import { ask, askSecret, confirm, isInteractive } from './prompt';
 import { verifyScmCredential, type VerifyResult } from './verify';
+import { normalizeSourceUrl } from './source-url';
 import {
   getBitbucketCloudAuth,
   describeError,
@@ -124,6 +125,12 @@ function usesBitbucketServerAuth(source: string): boolean {
   return 'special' in token && token.special === 'bitbucket-server';
 }
 
+/** "a", "a and b", "a, b and c" — for prose that lists a derived set. */
+function listInProse(items: readonly string[]): string {
+  if (items.length <= 2) return items.join(' and ');
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
 /** Example host shown when a self-hostable source has no URL stored yet. */
 const URL_EXAMPLES: Record<string, string> = {
   'github-enterprise': 'https://github.example.com',
@@ -165,15 +172,28 @@ async function promptSourceUrl(source: string): Promise<void> {
       ? `(e.g. ${example})`
       : `(e.g. ${example}) [blank for ${fallback ?? 'the public host'}]`;
 
-  const url = await ask(`\n${label} URL ${hint}: `);
-  if (url) {
-    setSourceUrl(source, url.trim());
+  for (;;) {
+    const url = await ask(`\n${label} URL ${hint}: `);
+    if (!url) {
+      if (!current && requiresSourceUrl) {
+        throw new Error(
+          `${label} is self-hosted, so it needs its URL — there is no default host to fall back on.`,
+        );
+      }
+      return;
+    }
+
+    // Checked here, where a typo can be retyped, rather than stored as typed
+    // and left to fail at the credential check under the wrong heading.
+    let normalized: string;
+    try {
+      normalized = normalizeSourceUrl(url, `${label} URL`);
+    } catch (error) {
+      console.log(`  ✗ ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+    setSourceUrl(source, normalized);
     return;
-  }
-  if (!current && requiresSourceUrl) {
-    throw new Error(
-      `${label} is self-hosted, so it needs its URL — there is no default host to fall back on.`,
-    );
   }
 }
 
@@ -637,7 +657,10 @@ async function importCmd(args: ImportArgs): Promise<void> {
   }
   // A host stored by `auth login` stands in for the flag, since a self-hosted
   // URL never changes. The flag still wins, so a one-off run can override it.
-  const sourceUrl = args.sourceUrl ?? storedSourceUrl(args.source);
+  const sourceUrl =
+    args.sourceUrl !== undefined
+      ? normalizeSourceUrl(args.sourceUrl, '--source-url')
+      : storedSourceUrl(args.source);
   if (REQUIRES_SOURCE_URL.has(args.source) && !sourceUrl) {
     throw new Error(
       `--source-url is required for --source ${args.source} (e.g. https://ghe.example.com), ` +
@@ -846,7 +869,7 @@ async function main(): Promise<void> {
           .option('region', { type: 'string', describe: REGION_DESCRIBE })
           .option('source-url', {
             type: 'string',
-            describe: `Self-hosted host URL (required for ${[...REQUIRES_SOURCE_URL].join(' and ')})`,
+            describe: `Self-hosted host URL (required for ${listInProse([...REQUIRES_SOURCE_URL])})`,
           })
           .option('yes', { type: 'boolean', default: false, describe: 'Skip confirmation (for CI)' })
           .option('dry-run', { type: 'boolean', default: false, describe: 'Show the plan; create nothing' }),
