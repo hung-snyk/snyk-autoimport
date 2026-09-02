@@ -164,6 +164,12 @@ worktree`) is a separate package directory and needs its own login.
 > is load-bearing — do not remove it, and do not `git add -f` the file. If you
 > fork or copy this repository, confirm the entry survived.
 
+> [!NOTE]
+> The classic `github` integration authenticates imports through a personal
+> GitHub OAuth link inside Snyk, so it needs a **personal** Snyk token — a
+> service account reads fine but gets `401` on every repository.
+> `github-cloud-app` has no such dependency.
+
 Environment variables always win over the file, so automation can supply secrets
 without writing a token to disk — the recommended approach for CI and shared
 machines:
