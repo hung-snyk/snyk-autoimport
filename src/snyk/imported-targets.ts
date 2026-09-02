@@ -139,6 +139,13 @@ function bitbucketServerTarget(project: SnykProject): Target | undefined {
 /**
  * GitLab keeps its whole "group/sub/repo" path as the name, and dedup matches
  * on that path rather than the numeric id Snyk never returns.
+ *
+ * Deliberately does NOT call withoutBranchSuffix, unlike every other origin.
+ * This is a faithful port of snyk-api-import, and the asymmetry is on the safe
+ * side: if a GitLab name ever carries "(branch)", the target fails to match and
+ * the repo looks *new*, costing a harmless re-import. Adding the strip without
+ * live GitLab projects to check against could make a repo look *already
+ * imported* and silently skip it. Do not "fix" this without that evidence.
  */
 function gitlabTarget(project: SnykProject): Target | undefined {
   const name = repoPart(project.name);
@@ -152,7 +159,6 @@ const TARGET_FROM_PROJECT: Record<SnykProjectOrigin, (p: SnykProject) => Target 
   [SnykProjectOrigin.GHE]: ownerNameTarget,
   [SnykProjectOrigin.AZURE_REPOS]: ownerNameTarget,
   [SnykProjectOrigin.BITBUCKET_CLOUD]: ownerNameTarget,
-  [SnykProjectOrigin.BITBUCKET_CLOUD_APP]: ownerNameTarget,
   [SnykProjectOrigin.BITBUCKET_CONNECT_APP]: ownerNameTarget,
   [SnykProjectOrigin.BITBUCKET_SERVER]: bitbucketServerTarget,
   [SnykProjectOrigin.GITLAB]: gitlabTarget,
