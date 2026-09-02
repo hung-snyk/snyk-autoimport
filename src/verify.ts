@@ -23,6 +23,7 @@ import { getBitbucketCloudAuth } from './scm/bitbucket-cloud';
 import { bitbucketServerAuthHeader } from './scm/bitbucket-server';
 import { basicAuth, scmGet, ScmError } from './scm/http';
 import { storedSourceUrl } from './config';
+import { normalizeStoredSourceUrl } from './source-url';
 
 export type VerifyResult =
   | { status: 'ok'; detail: string }
@@ -34,6 +35,16 @@ const UNVERIFIABLE: Record<string, string> = {
   'azure-repos':
     'an Azure PAT scoped to Code only is rejected by account-level endpoints, so a check here would prove nothing',
 };
+
+/**
+ * The stored host for a source, validated. A config written before URLs were
+ * checked can hold a schemeless host, and sending that to fetch() produces the
+ * misattributed failure this check exists to avoid.
+ */
+function storedHost(source: string): string | undefined {
+  const stored = storedSourceUrl(source);
+  return stored === undefined ? undefined : normalizeStoredSourceUrl(stored, source);
+}
 
 function describeScmFailure(error: unknown): string {
   if (error instanceof ScmError) {
@@ -159,12 +170,16 @@ export async function verifyScmCredential(
   const skip = UNVERIFIABLE[source];
   if (skip) return { status: 'skipped', reason: skip };
 
-  // Only consulted by the sources that can be self-hosted. github.com and
-  // api.bitbucket.org are single-host, so they deliberately ignore it: a host
-  // stored against those could only ever be wrong.
-  const host = hostOverride ?? storedSourceUrl(source);
-
   try {
+    // Only consulted by the sources that can be self-hosted. github.com and
+    // api.bitbucket.org are single-host, so they deliberately ignore it: a
+    // host stored against those could only ever be wrong.
+    //
+    // Resolved inside the try so a stored value that predates URL validation
+    // is reported as the bad URL it is — naming the host — instead of being
+    // sent to fetch() and coming back as an unexplained failure.
+    const host = hostOverride ?? storedHost(source);
+
     switch (source) {
       case 'github':
       case 'github-cloud-app':

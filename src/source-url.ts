@@ -66,3 +66,29 @@ export function normalizeSourceUrl(input: string, label: string): string {
 
   return url.href.replace(/\/+$/, '');
 }
+
+/**
+ * Validate a URL that came out of the config file rather than from the user
+ * just now.
+ *
+ * A file written before `normalizeSourceUrl` existed can hold a schemeless
+ * host, and using it produces exactly the misattributed failure this module
+ * was added to stop. This mirrors `storedRegion()` in env.ts: a stale stored
+ * value is a migration problem, and saying so — with the command that fixes
+ * it — beats failing later under an unrelated heading.
+ *
+ * Deliberately NOT called from the `auth login` prompt, which shows the
+ * current value only so the user can replace it. Throwing there would block
+ * the one command that can fix the bad value.
+ */
+export function normalizeStoredSourceUrl(url: string, source: string): string {
+  try {
+    return normalizeSourceUrl(url, `stored ${source} URL`);
+  } catch (error) {
+    const why = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${why}\nIt was stored by an earlier version, before URLs were checked. ` +
+        'Run `snyk-autoimport auth login` to set it again, or pass --source-url.',
+    );
+  }
+}

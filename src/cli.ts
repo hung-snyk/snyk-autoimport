@@ -70,7 +70,7 @@ import { printSummary } from './report';
 import { describeTarget } from './target-format';
 import { ask, askSecret, confirm, isInteractive } from './prompt';
 import { verifyScmCredential, type VerifyResult } from './verify';
-import { normalizeSourceUrl } from './source-url';
+import { normalizeSourceUrl, normalizeStoredSourceUrl } from './source-url';
 import { describeDiscovery, type Discovery } from './discovery';
 import {
   getBitbucketCloudAuth,
@@ -658,10 +658,15 @@ async function importCmd(args: ImportArgs): Promise<void> {
   }
   // A host stored by `auth login` stands in for the flag, since a self-hosted
   // URL never changes. The flag still wins, so a one-off run can override it.
+  // Both are validated: the flag as typed, and the stored value because a
+  // config written before URLs were checked can still hold a bad one.
+  const stored = storedSourceUrl(args.source);
   const sourceUrl =
     args.sourceUrl !== undefined
       ? normalizeSourceUrl(args.sourceUrl, '--source-url')
-      : storedSourceUrl(args.source);
+      : stored === undefined
+        ? undefined
+        : normalizeStoredSourceUrl(stored, args.source);
   if (REQUIRES_SOURCE_URL.has(args.source) && !sourceUrl) {
     throw new Error(
       `--source-url is required for --source ${args.source} (e.g. https://ghe.example.com), ` +
