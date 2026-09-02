@@ -71,6 +71,7 @@ import { describeTarget } from './target-format';
 import { ask, askSecret, confirm, isInteractive } from './prompt';
 import { verifyScmCredential, type VerifyResult } from './verify';
 import { normalizeSourceUrl } from './source-url';
+import { describeDiscovery, type Discovery } from './discovery';
 import {
   getBitbucketCloudAuth,
   describeError,
@@ -595,7 +596,7 @@ async function discoverForSource(
   orgId: string,
   integrationId: string,
   sourceUrl: string | undefined,
-): Promise<ImportTarget[]> {
+): Promise<Discovery> {
   switch (source) {
     case 'github':
     case GITHUB_CLOUD_APP_SOURCE:
@@ -692,14 +693,15 @@ async function importCmd(args: ImportArgs): Promise<void> {
   console.log(`✓ Using ${args.source} integration ${integrationId}`);
 
   console.log(`Discovering repos in ${args.sourceOrg}...`);
-  const candidates = await discoverForSource(
+  const discovery = await discoverForSource(
     args.source,
     args.sourceOrg,
     org.id,
     integrationId,
     sourceUrl,
   );
-  console.log(`✓ Found ${candidates.length} repo(s)`);
+  const candidates = discovery.targets;
+  console.log(`✓ ${describeDiscovery(discovery)}`);
 
   const { toImport, alreadyImported } = await filterAlreadyImported(
     rm,

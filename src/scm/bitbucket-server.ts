@@ -17,6 +17,11 @@ interface BitbucketServerApiRepo {
   name: string;
   slug?: string;
   project: { key: string; name?: string };
+  /**
+   * Present on Bitbucket Data Center 8.0+, absent before archiving existed.
+   * Read from the documented field shape; not yet seen from a live server.
+   */
+  archived?: boolean;
 }
 
 interface BitbucketServerPage {
@@ -77,7 +82,11 @@ export async function listBitbucketServerRepos(
       // ("my-repo"), while name is the display form ("My Repo"). NOTE this
       // differs from snyk-api-import, which sent `name` as the repoSlug —
       // verify against a live Bitbucket Server before relying on it.
-      repos.push({ projectKey: repo.project.key, repoSlug: repo.slug ?? repo.name });
+      repos.push({
+        projectKey: repo.project.key,
+        repoSlug: repo.slug ?? repo.name,
+        archived: repo.archived ?? false,
+      });
     }
 
     if (body.isLastPage || !body.nextPageStart) return repos;

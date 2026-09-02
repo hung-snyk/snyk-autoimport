@@ -9,7 +9,8 @@
  * dedup never uses `id` — Snyk's project API never returns it — so `name`
  * must be carried too, even though the wire call itself drops it.
  */
-import { listGitlabRepos, type ImportTarget } from './api';
+import { listGitlabRepos } from './api';
+import { toDiscovery, type Discovery } from './discovery';
 
 export interface DiscoverGitlabOptions {
   /** GitLab group name (not a personal namespace — unverified whether that distinction matters here, unlike the confirmed GitHub org-only limitation). */
@@ -22,9 +23,9 @@ export interface DiscoverGitlabOptions {
 
 export async function discoverGitlabTargets(
   opts: DiscoverGitlabOptions,
-): Promise<ImportTarget[]> {
+): Promise<Discovery> {
   const repos = await listGitlabRepos(opts.groupName, opts.host);
-  return repos.map((repo) => ({
+  return toDiscovery(repos, (repo) => ({
     orgId: opts.orgId,
     integrationId: opts.integrationId,
     target: {

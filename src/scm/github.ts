@@ -44,15 +44,14 @@ export async function listGithubRepos(
     );
 
     for (const repo of body) {
-      // An archived repo is read-only upstream; importing it produces findings
-      // nobody can act on.
-      if (repo.archived) continue;
+      // No default branch means an empty repo — nothing to scan.
       if (!repo.owner?.login || !repo.default_branch) continue;
       repos.push({
         name: repo.name,
         owner: repo.owner.login,
         branch: repo.default_branch,
         fork: repo.fork,
+        archived: repo.archived,
       });
     }
 

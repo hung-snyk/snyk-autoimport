@@ -9,7 +9,8 @@
  * product, and discovery throws if it's missing (`sources.ts`'s
  * REQUIRES_SOURCE_URL also enforces this upfront, before any token check).
  */
-import { listBitbucketServerRepos, type ImportTarget } from './api';
+import { listBitbucketServerRepos } from './api';
+import { toDiscovery, type Discovery } from './discovery';
 
 export interface DiscoverBitbucketServerOptions {
   projectName: string;
@@ -20,9 +21,9 @@ export interface DiscoverBitbucketServerOptions {
 
 export async function discoverBitbucketServerTargets(
   opts: DiscoverBitbucketServerOptions,
-): Promise<ImportTarget[]> {
+): Promise<Discovery> {
   const repos = await listBitbucketServerRepos(opts.projectName, opts.host);
-  return repos.map((repo) => ({
+  return toDiscovery(repos, (repo) => ({
     orgId: opts.orgId,
     integrationId: opts.integrationId,
     target: {

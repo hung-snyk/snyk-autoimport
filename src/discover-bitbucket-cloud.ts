@@ -12,11 +12,8 @@
  * `BITBUCKET_CLOUD_USERNAME` / `BITBUCKET_CLOUD_PASSWORD`. The Bearer methods
  * are env-var only — see the Credentials type in config.ts for why.
  */
-import {
-  listBitbucketCloudRepos,
-  getBitbucketCloudAuth,
-  type ImportTarget,
-} from './api';
+import { listBitbucketCloudRepos, getBitbucketCloudAuth } from './api';
+import { toDiscovery, type Discovery } from './discovery';
 
 export interface DiscoverBitbucketCloudOptions {
   workspace: string;
@@ -26,9 +23,11 @@ export interface DiscoverBitbucketCloudOptions {
 
 export async function discoverBitbucketCloudTargets(
   opts: DiscoverBitbucketCloudOptions,
-): Promise<ImportTarget[]> {
+): Promise<Discovery> {
   const repos = await listBitbucketCloudRepos(getBitbucketCloudAuth(), opts.workspace);
-  return repos.map((repo) => ({
+  // Bitbucket Cloud cannot archive a repo, so the archived count here is
+  // always zero — the shared helper is used for the uniform return shape.
+  return toDiscovery(repos, (repo) => ({
     orgId: opts.orgId,
     integrationId: opts.integrationId,
     target: {

@@ -85,13 +85,13 @@ export async function listAzureRepos(
     );
 
     for (const repo of body.value ?? []) {
-      // No default branch means an empty repo; disabled repos cannot be read.
+      // No default branch means an empty repo — nothing to scan.
       if (!repo.name || !repo.project?.name || !repo.defaultBranch) continue;
-      if (repo.isDisabled) continue;
       repos.push({
         name: repo.name,
         owner: repo.project.name,
         branch: repo.defaultBranch,
+        archived: repo.isDisabled,
       });
     }
   }

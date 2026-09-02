@@ -64,12 +64,13 @@ async function collectProjects(
       // returns projects the user owns elsewhere too.
       if (project.namespace?.full_path !== namespace) continue;
       // No default branch means an empty project — nothing to scan.
-      if (project.archived || !project.default_branch) continue;
+      if (!project.default_branch) continue;
       repos.push({
         id: project.id,
         name: project.path_with_namespace,
         branch: project.default_branch,
         fork: Boolean(project.forked_from_project),
+        archived: project.archived,
       });
     }
 

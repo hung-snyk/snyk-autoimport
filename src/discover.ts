@@ -1,7 +1,8 @@
 /**
  * GitHub repo discovery — shared by all three GitHub-family sources (github,
  * github-cloud-app, github-enterprise), which read the same GitHub REST API
- * with a PAT (GITHUB_TOKEN) and return every non-archived repo in an org.
+ * with a PAT (GITHUB_TOKEN) and return every repo in an org. Archived repos
+ * are set aside by `toDiscovery`, and reported.
  *
  * Deliberately org-only: `listGithubRepos` calls GitHub's *organization*
  * repos endpoint, which 404s for a personal account (github.com/<user> is
@@ -10,7 +11,8 @@
  * README. We surface it as a clear, actionable error rather than let GitHub's
  * raw 404 through.
  */
-import { listGithubRepos, type ImportTarget } from './api';
+import { listGithubRepos } from './api';
+import { toDiscovery, type Discovery } from './discovery';
 
 export interface DiscoverOptions {
   /** GitHub organization login. Personal accounts are not supported. */
@@ -24,7 +26,7 @@ export interface DiscoverOptions {
 /** Discover repos and shape them into import targets ready for the API. */
 export async function discoverGithubTargets(
   opts: DiscoverOptions,
-): Promise<ImportTarget[]> {
+): Promise<Discovery> {
   let repos;
   try {
     repos = await listGithubRepos(opts.githubOrg, opts.host);
@@ -40,7 +42,7 @@ export async function discoverGithubTargets(
     }
     throw err;
   }
-  return repos.map((repo) => ({
+  return toDiscovery(repos, (repo) => ({
     orgId: opts.orgId,
     integrationId: opts.integrationId,
     target: {

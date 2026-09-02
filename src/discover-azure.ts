@@ -6,10 +6,12 @@
  *
  * The branch is always the repo's default branch, read from Azure's
  * `defaultBranch`; there is no per-repo override, so nothing here chooses a
- * branch. Repos with no default branch (empty repos) and disabled repos are
- * dropped during discovery before we see them.
+ * branch. Repos with no default branch (empty repos) are dropped by
+ * `listAzureRepos`; disabled repos — Azure's equivalent of archived — are set
+ * aside by `toDiscovery` and reported.
  */
-import { listAzureRepos, type ImportTarget } from './api';
+import { listAzureRepos } from './api';
+import { toDiscovery, type Discovery } from './discovery';
 
 export interface DiscoverAzureOptions {
   orgName: string;
@@ -42,9 +44,9 @@ export function shortBranchName(ref: string | undefined): string | undefined {
 
 export async function discoverAzureTargets(
   opts: DiscoverAzureOptions,
-): Promise<ImportTarget[]> {
+): Promise<Discovery> {
   const repos = await listAzureRepos(opts.orgName, opts.host);
-  return repos.map((repo) => ({
+  return toDiscovery(repos, (repo) => ({
     orgId: opts.orgId,
     integrationId: opts.integrationId,
     target: {
