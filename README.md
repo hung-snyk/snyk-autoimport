@@ -31,9 +31,21 @@ client or provider SDKs — discovery uses the Node runtime's built-in `fetch`.
 | Requirement | Details |
 |---|---|
 | Node.js | 20 or later |
-| Snyk API token | Classic `github` and `github-enterprise` need a **personal** token, not a service account — they authenticate through a personal GitHub OAuth link and return `401` otherwise. Everything else works with a service account. |
+| Snyk API token | A service account or personal token whose role has the permissions listed under [Snyk API token](#snyk-api-token). |
 | SCM credential | Snyk cannot expose the credential stored on an integration, so discovery needs its own. |
 | Configured Snyk integration | The target organization must already have the relevant SCM integration connected in Snyk. |
+
+### Snyk API token
+
+The token's role needs these Organization-level permissions
+([Pre-defined roles](https://docs.snyk.io/platform-administration/user-management/pre-defined-roles)):
+
+| Permission | Used to |
+|---|---|
+| **View Organization** | Resolve `--snyk-org` to an ID |
+| **View Integrations** | Find the integration matching `--source` |
+| **View Project** | Skip repositories already imported |
+| **Add Project** | Submit the import and poll it to completion |
 
 ## Installation
 
