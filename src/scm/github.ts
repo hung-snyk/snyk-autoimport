@@ -19,9 +19,24 @@ interface GithubApiRepo {
   fork: boolean;
 }
 
-/** GitHub Enterprise Server serves its API under /api/v3. */
+/**
+ * GitHub Enterprise Server serves its API under /api/v3.
+ *
+ * Appended to the host rather than resolved through `new URL('/api/v3', host)`.
+ * That form takes `/api/v3` as root-relative and drops any path the host
+ * carries, so a server behind a context path (`https://ghe.example.com/github`)
+ * was silently queried at `https://ghe.example.com/api/v3` — the wrong host,
+ * with no error, which is the outcome REQUIRES_SOURCE_URL exists to prevent.
+ * `gitlabBaseUrl`, `azureBaseUrl` and Bitbucket Server all append, so this was
+ * also the one helper that behaved differently.
+ *
+ * Hosts reaching here are validated and normalised by `source-url.ts`, at both
+ * the `auth login` prompt and `--source-url`; the trailing-slash strip is kept
+ * as defence in depth for a value stored before that existed.
+ */
 export function githubBaseUrl(host?: string): string {
-  return host ? new URL('/api/v3', host).toString().replace(/\/$/, '') : 'https://api.github.com';
+  if (!host) return 'https://api.github.com';
+  return `${host.replace(/\/+$/, '')}/api/v3`;
 }
 
 export async function listGithubRepos(
