@@ -70,7 +70,7 @@ snyk-autoimport` to remove). Examples below use `snyk-autoimport`; substitute
 | `auth status` | Shows the config path, which credentials are set, and the region. Token values are never printed. |
 | `auth logout` | Clears everything stored: credentials, region and any saved server URLs. |
 | `integrations --snyk-org "<name>"` | Lists the SCM integrations configured on an organization, with the `--source` value for each. Use it when unsure which to pass — an organization can have several from the same family, and `github` and `github-cloud-app` behave differently. |
-| `import --snyk-org "<name>" --source <source> --source-org <org>` | Discovers repositories, skips those already imported, submits the rest, and prints a summary. Archived repositories are not imported — they are read-only upstream, so nothing found in them could be fixed in place — and the count skipped is shown next to the count found. Azure Repos has no archive state; its disabled repositories are treated the same way. Bitbucket Cloud cannot archive a repository, so nothing is skipped there. Forks are imported. |
+| `import --snyk-org "<name>" --source <source> --source-org <org>` | Discovers repositories, skips those already imported, submits the rest, and prints a summary. Archived repositories are not imported — they are read-only upstream, so nothing found in them could be fixed in place — and the count skipped is shown next to the count found. Azure Repos has no archive state; its disabled repositories are treated the same way. Bitbucket Cloud cannot archive a repository, so nothing is skipped there. Forks are imported. The count found is repositories that *could* be imported, so empty repositories — no default branch, nothing to clone — are not included in either number. |
 
 `import` flags:
 
@@ -132,7 +132,7 @@ $ snyk-autoimport import --snyk-org "Acme Corp" --source github-cloud-app --sour
 ✓ Resolved "Acme Corp" → d2f6e6d5-a481-4d4f-977d-349d689207cf (group: Acme Ltd)
 ✓ Using github-cloud-app integration 0686349f-4442-415e-ae17-88713c79d964
 Discovering repos in acme-corp...
-✓ Found 24 repo(s) (2 archived, skipped)
+✓ Found 24 repo(s) (2 more archived, skipped)
 ✓ 21 already imported — 3 new to import
 Import 3 repo(s) into Acme Corp? (Y/n)
 
