@@ -31,13 +31,19 @@ client or provider SDKs — discovery uses the Node runtime's built-in `fetch`.
 | Requirement | Details |
 |---|---|
 | Node.js | 20 or later |
-| Snyk API token | A service account or personal token whose role has the permissions listed under [Snyk API token](#snyk-api-token). |
+| Snyk credential | An API token, or an OAuth 2.0 service account (client ID + secret), whose role has the permissions listed under [Snyk credential](#snyk-credential). |
 | SCM credential | Snyk cannot expose the credential stored on an integration, so discovery needs its own. |
 | Configured Snyk integration | The target organization must already have the relevant SCM integration connected in Snyk. |
 
-### Snyk API token
+### Snyk credential
 
-The token's role needs these Organization-level permissions
+Either type works — an API token (personal or service account), or an
+[OAuth 2.0 service account](https://docs.snyk.io/platform-administration/service-accounts/service-accounts-using-oauth-2.0),
+whose client ID and secret are exchanged for a short-lived access token that is
+refreshed automatically. Snyk recommends the latter for automation, since an API
+key never expires.
+
+The role needs these Organization-level permissions
 ([Pre-defined roles](https://docs.snyk.io/platform-administration/user-management/pre-defined-roles)):
 
 | Permission | Used to |
@@ -66,8 +72,8 @@ snyk-autoimport` to remove). Examples below use `snyk-autoimport`; substitute
 
 | Command | Description |
 |---|---|
-| `auth login` | Asks for your region, Snyk token, source, and that source's credential, checking each against a live API. Sources that can be self-hosted are also asked for their server URL, which is stored and reused — required for GitHub Enterprise and Bitbucket Server, optional for GitLab (blank uses gitlab.com). The credential is checked against that host, so a self-managed token is verified where it is actually valid. One source at a time — run it again to add another. Requires an interactive terminal. |
-| `auth status` | Shows the config path, which credentials are set, and the region. Token values are never printed. |
+| `auth login` | Asks for your region, Snyk credential (API token or OAuth service account), source, and that source's credential, checking each against a live API. Sources that can be self-hosted are also asked for their server URL, which is stored and reused — required for GitHub Enterprise and Bitbucket Server, optional for GitLab (blank uses gitlab.com). The credential is checked against that host, so a self-managed token is verified where it is actually valid. One source at a time — run it again to add another. Requires an interactive terminal. |
+| `auth status` | Shows the config path, which credentials are set, which Snyk auth method is in use, and the region. Secrets are never printed. |
 | `auth logout` | Clears everything stored: credentials, region and any saved server URLs. |
 | `integrations --snyk-org "<name>"` | Lists the SCM integrations configured on an organization, with the `--source` value for each. Use it when unsure which to pass — an organization can have several from the same family, and `github` and `github-cloud-app` behave differently. |
 | `import --snyk-org "<name>" --source <source> --source-org <org>` | Discovers repositories, skips those already imported, submits the rest, and prints a summary. Archived repositories are not imported — they are read-only upstream, so nothing found in them could be fixed in place — and the count skipped is shown next to the count found. Azure Repos has no archive state; its disabled repositories are treated the same way. Bitbucket Cloud cannot archive a repository, so nothing is skipped there. Forks are imported. The count found is repositories that *could* be imported, so empty repositories — no default branch, nothing to clone — are not included in either number. |
@@ -99,8 +105,15 @@ Which Snyk region is your account on?
   [4] snyk-au-01
 Pick one (1-4 or name) [blank keeps snyk-us-01]:
 
+How will you authenticate to Snyk?
+  [1] Snyk API token
+      from app.snyk.io/account — one value, and it never expires
+  [2] OAuth 2.0 service account
+      a client ID and secret, exchanged here for a short-lived token
+Pick one (1-2): 1
+
 Snyk API token: ***
-  Checking token... ✓ valid (6 organizations visible)
+  Checking credentials... ✓ valid (6 organizations visible)
 
 Which source will you import from?
   [1] GitHub               --source github
@@ -167,8 +180,8 @@ worktree`) is a separate package directory and needs its own login.
 > [!NOTE]
 > The classic `github` integration authenticates imports through a personal
 > GitHub OAuth link inside Snyk, so it needs a **personal** Snyk token — a
-> service account reads fine but gets `401` on every repository.
-> `github-cloud-app` has no such dependency.
+> service account reads fine but gets `401` on every repository, and that holds
+> for an OAuth service account too. `github-cloud-app` has no such dependency.
 
 Environment variables always win over the file, so automation can supply secrets
 without writing a token to disk — the recommended approach for CI and shared
@@ -176,12 +189,16 @@ machines:
 
 | Source | Variables |
 |---|---|
-| Snyk | `SNYK_TOKEN`, `SNYK_API` |
+| Snyk | `SNYK_TOKEN`, or `SNYK_OAUTH_CLIENT_ID` + `SNYK_OAUTH_CLIENT_SECRET` for an OAuth service account (`SNYK_OAUTH_TOKEN` also works if you mint the access token yourself). `SNYK_API` sets the region. |
 | GitHub (all three) | `GITHUB_TOKEN` |
 | GitLab | `GITLAB_TOKEN` |
 | Azure Repos | `AZURE_TOKEN` |
 | Bitbucket Cloud (both) | `BITBUCKET_CLOUD_USERNAME` + `BITBUCKET_CLOUD_PASSWORD` (Basic), or `BITBUCKET_CLOUD_API_TOKEN` / `BITBUCKET_CLOUD_OAUTH_TOKEN` (Bearer). `BITBUCKET_CLOUD_AUTH_METHOD` forces `user`, `api` or `oauth`. |
 | Bitbucket Server | `BITBUCKET_SERVER_USERNAME` + `BITBUCKET_SERVER_PASSWORD` (Basic), or `BITBUCKET_SERVER_TOKEN` (Bearer) |
+
+When more than one Snyk credential is present, client credentials win over
+`SNYK_OAUTH_TOKEN`, which wins over `SNYK_TOKEN`. Setting only one half of the
+client-credentials pair is an error rather than a silent fall back to the token.
 
 For Bitbucket Cloud, pair an Atlassian **email** with an **API token**, or a
 Bitbucket **username** with an **app password** — crossing them over fails. For
@@ -194,11 +211,17 @@ Pass credentials through the environment, target the organization by UUID, and
 skip the prompt:
 
 ```bash
-SNYK_TOKEN="$SNYK_TOKEN" GITHUB_TOKEN="$GITHUB_TOKEN" \
+SNYK_OAUTH_CLIENT_ID="$SNYK_OAUTH_CLIENT_ID" \
+SNYK_OAUTH_CLIENT_SECRET="$SNYK_OAUTH_CLIENT_SECRET" \
+GITHUB_TOKEN="$GITHUB_TOKEN" \
   snyk-autoimport import \
     --snyk-org-id 00000000-0000-0000-0000-000000000000 \
     --source github-cloud-app --source-org acme-corp --yes
 ```
+
+Substitute `SNYK_TOKEN="$SNYK_TOKEN"` for the two OAuth variables to use an API
+token instead. Access tokens are refreshed mid-run as needed, so a long import
+cannot outlive its credential.
 
 Deduplication runs against live Snyk state every time, so this is safe to run on
 a schedule to pick up new repositories. Budget wall-clock time rather than a

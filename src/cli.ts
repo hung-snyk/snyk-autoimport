@@ -18,6 +18,7 @@ import { hideBin } from 'yargs/helpers';
 import {
   configFilePath,
   setCredentials,
+  removeCredentials,
   clearStoredConfig,
   loadConfig,
   setRegion,
@@ -76,6 +77,7 @@ import {
   getBitbucketCloudAuth,
   describeError,
   formatError,
+  resetSnykOauthCache,
   type ImportTarget,
   type PollProgress,
 } from './api';
@@ -254,22 +256,31 @@ async function promptForSource(): Promise<string> {
 }
 
 /**
- * Confirm a Snyk token actually works, by listing the organizations it can
- * see. Done before asking anything else, so a wrong or expired token is caught
- * here rather than after the user has picked a source and pasted a second
- * secret — and rather than at the start of a real import.
+ * Confirm the Snyk credential in the environment actually works, by listing
+ * the organizations it can see. Done before asking anything else, so a wrong
+ * or expired credential is caught here rather than after the user has picked a
+ * source and pasted a second secret — and rather than at the start of a real
+ * import.
+ *
+ * For an OAuth service account this exercises the whole chain: the client
+ * credentials are exchanged for an access token, and that token is used
+ * against the API. A bad secret fails at the exchange, with the reason Snyk
+ * gave; a good secret with no organization access fails at the call.
  */
-async function verifySnykToken(): Promise<
+async function verifySnykCredential(): Promise<
   { ok: true; orgs: OrgSummary[] } | { ok: false; reason: string }
 > {
   try {
+    // A retyped secret must be exchanged afresh rather than checked against
+    // the token the previous attempt already minted.
+    resetSnykOauthCache();
     const orgs = await listAllOrgs(makeRequestManager('snyk-autoimport:auth'));
     return { ok: true, orgs };
   } catch (error) {
     const detail = describeError(error);
     const reason =
       detail.status === 401
-        ? 'the token was rejected (401). Check you pasted it whole, and that it matches the region above.'
+        ? 'the credential was rejected (401). Check you pasted it whole, and that it matches the region above.'
         : formatError(detail);
     return { ok: false, reason };
   }
@@ -311,40 +322,141 @@ async function promptRegion(config: StoredConfig): Promise<Region | undefined> {
   }
 }
 
+/** The two Snyk credential types `auth login` can store. */
+const SNYK_AUTH_METHODS = [
+  {
+    key: 'token' as const,
+    label: 'Snyk API token',
+    note: 'from app.snyk.io/account — one value, and it never expires',
+  },
+  {
+    key: 'oauth' as const,
+    label: 'OAuth 2.0 service account',
+    note: 'a client ID and secret, exchanged here for a short-lived token',
+  },
+];
+
+type SnykAuthChoice = (typeof SNYK_AUTH_METHODS)[number]['key'];
+
 /**
- * Prompt for a Snyk token and verify it, re-prompting while it fails.
+ * Which Snyk credential to use. Numbered like the region and source pickers.
  *
- * Returns the org list from that verification alongside the token, so the
- * integration check below can reuse it rather than calling /orgs again.
+ * Asked rather than inferred from what happens to be stored: only one method
+ * ends up stored (the other is cleared below), so this is the step that
+ * decides it, and an OAuth service account is not something to fall into by
+ * accident when a plain token was meant.
  */
-async function promptAndVerifySnykToken(
-  existing: Credentials,
-): Promise<{ token?: string; orgs: OrgSummary[] }> {
+async function promptSnykAuthMethod(existing: Credentials): Promise<SnykAuthChoice> {
+  const current: SnykAuthChoice | undefined = existing.snykOauthClientId
+    ? 'oauth'
+    : existing.snykToken
+      ? 'token'
+      : undefined;
+
+  console.log('\nHow will you authenticate to Snyk?');
+  SNYK_AUTH_METHODS.forEach((method, i) => {
+    const mark = method.key === current ? '  (current)' : '';
+    console.log(`  [${i + 1}] ${method.label}${mark}`);
+    console.log(`      ${method.note}`);
+  });
+
+  const currentLabel = SNYK_AUTH_METHODS.find((m) => m.key === current)?.label;
   for (;;) {
-    const entered = await askSecret(secretPrompt('snykToken', existing));
-    const effective = entered || existing.snykToken;
-    if (!effective) {
-      throw new Error(
-        'A Snyk API token is required. Get one from https://app.snyk.io/account',
-      );
+    const suffix = currentLabel ? ` [blank keeps ${currentLabel}]` : '';
+    const answer = await ask(`Pick one (1-${SNYK_AUTH_METHODS.length})${suffix}: `);
+    if (!answer && current) return current;
+    const picked = SNYK_AUTH_METHODS[Number(answer) - 1];
+    if (picked) return picked.key;
+    console.log(
+      `  "${answer}" is not one of the options — enter a number from 1 to ` +
+        `${SNYK_AUTH_METHODS.length}.`,
+    );
+  }
+}
+
+/** What a Snyk login produced: what to store, and what it replaces. */
+interface SnykAuthEntry {
+  /** Newly entered values, to store. Empty when the stored ones were kept. */
+  creds: Credentials;
+  /** Stored credentials belonging to the method NOT chosen. */
+  obsolete: Array<keyof Credentials>;
+  /** Human-readable name of the method chosen, for the summary. */
+  label: string;
+}
+
+/**
+ * Prompt for a Snyk credential and verify it, re-prompting while it fails.
+ *
+ * Both methods publish to `process.env` before the check, so what gets
+ * verified is exactly what the next import will use. The unchosen method's
+ * variables are cleared from the environment too: leaving them set would let
+ * the precedence rule in snyk/oauth.ts verify a credential the user did not
+ * just type.
+ */
+async function promptAndVerifySnykAuth(existing: Credentials): Promise<SnykAuthEntry> {
+  const method = await promptSnykAuthMethod(existing);
+  const label = SNYK_AUTH_METHODS.find((m) => m.key === method)?.label ?? method;
+  console.log('');
+
+  for (;;) {
+    const creds: Credentials = {};
+
+    if (method === 'token') {
+      const entered = await askSecret(secretPrompt('snykToken', existing));
+      const effective = entered || existing.snykToken;
+      if (!effective) {
+        throw new Error(
+          'A Snyk API token is required. Get one from https://app.snyk.io/account',
+        );
+      }
+      if (entered) creds.snykToken = entered;
+      process.env.SNYK_TOKEN = effective;
+      delete process.env.SNYK_OAUTH_CLIENT_ID;
+      delete process.env.SNYK_OAUTH_CLIENT_SECRET;
+      delete process.env.SNYK_OAUTH_TOKEN;
+    } else {
+      const idSuffix = existing.snykOauthClientId
+        ? ` [current: ${existing.snykOauthClientId} — blank keeps it]`
+        : '';
+      // The client id is an identifier, not a secret, so it is echoed —
+      // seeing it is how a wrong service account gets spotted.
+      const id = await ask(`${CREDENTIAL_LABELS.snykOauthClientId}${idSuffix}: `);
+      const secret = await askSecret(secretPrompt('snykOauthClientSecret', existing));
+      const effectiveId = id || existing.snykOauthClientId;
+      const effectiveSecret = secret || existing.snykOauthClientSecret;
+      if (!effectiveId || !effectiveSecret) {
+        throw new Error(
+          'An OAuth 2.0 service account needs both a client ID and a client secret.\n' +
+            'Create one in Snyk under Settings → Service accounts (Enterprise plans), ' +
+            'and copy the secret then — it cannot be shown again.',
+        );
+      }
+      if (id) creds.snykOauthClientId = id;
+      if (secret) creds.snykOauthClientSecret = secret;
+      process.env.SNYK_OAUTH_CLIENT_ID = effectiveId;
+      process.env.SNYK_OAUTH_CLIENT_SECRET = effectiveSecret;
+      delete process.env.SNYK_TOKEN;
     }
 
-    // Publish it for the check below; prepareEnv would otherwise read the old
-    // stored value, which is exactly what we are trying to replace.
-    process.env.SNYK_TOKEN = effective;
-
-    process.stdout.write('  Checking token... ');
-    const result = await verifySnykToken();
+    process.stdout.write('  Checking credentials... ');
+    const result = await verifySnykCredential();
     if (result.ok) {
       const n = result.orgs.length;
       console.log(`✓ valid (${n} organization${n === 1 ? '' : 's'} visible)`);
-      return { token: entered || undefined, orgs: result.orgs };
+      return {
+        creds,
+        obsolete:
+          method === 'token'
+            ? ['snykOauthClientId', 'snykOauthClientSecret']
+            : ['snykToken'],
+        label,
+      };
     }
 
     console.log(`✗ ${result.reason}`);
-    const retry = await confirm('  Enter a different token?');
+    const retry = await confirm('  Try again?');
     if (!retry) {
-      throw new Error('Stopped without a working Snyk token — nothing was saved.');
+      throw new Error('Stopped without a working Snyk credential — nothing was saved.');
     }
   }
 }
@@ -403,11 +515,14 @@ async function authLogin(): Promise<void> {
   process.env.SNYK_API = REGION_API_HOSTS[effectiveRegion];
   if (region) setRegion(region);
 
-  // 2. Snyk token, verified before going any further.
-  console.log('');
+  // 2. The Snyk credential — API token or OAuth service account — verified
+  //    before going any further.
   const creds: Credentials = {};
-  const { token: snykToken } = await promptAndVerifySnykToken(existing);
-  if (snykToken) creds.snykToken = snykToken;
+  const snykAuth = await promptAndVerifySnykAuth(existing);
+  Object.assign(creds, snykAuth.creds);
+  // Only what is actually stored needs clearing; listing the rest would report
+  // deletions that never happened.
+  const obsolete = snykAuth.obsolete.filter((key) => existing[key] !== undefined);
 
   // 3. Which source.
   //    Deliberately NOT checked against Snyk here: integrations are
@@ -442,7 +557,11 @@ async function authLogin(): Promise<void> {
 
   // Publish what was just entered (falling back to what was already stored) so
   // the check below tests the credential the user will actually import with.
+  // The unchosen Snyk method is skipped: it is about to be deleted from the
+  // store, and re-publishing it here would put back the very variables
+  // promptAndVerifySnykAuth cleared from the environment.
   for (const key of CREDENTIAL_KEYS) {
+    if (snykAuth.obsolete.includes(key)) continue;
     const value = creds[key] ?? existing[key];
     if (value) process.env[CREDENTIAL_ENV_VARS[key]] = value;
   }
@@ -456,11 +575,16 @@ async function authLogin(): Promise<void> {
     return;
   }
   if (saved.length > 0) setCredentials(creds);
+  if (obsolete.length > 0) removeCredentials(obsolete);
 
   // 6. Everything is entered and checked — now say what happened and where it
   //    went. Leading with a file path told the user nothing they could act on.
   console.log('');
   if (region) console.log(`✓ Region set to ${region}.`);
+  console.log(`✓ Snyk auth: ${snykAuth.label}.`);
+  if (obsolete.length > 0) {
+    console.log('  The credentials for the other Snyk auth method were removed.');
+  }
   if (saved.length > 0) {
     console.log(`✓ Stored ${saved.length} credential(s), chmod 600:`);
     console.log(`    ${configFilePath()}`);
@@ -492,7 +616,18 @@ function authStatus(): void {
         '    Run `auth login` to store them at the path above, then delete the old file.',
     );
   }
-  console.log('  Snyk token:              ' + (creds.snykToken ? 'set' : 'not set'));
+  // One line, not one per field: what matters is which method will be used,
+  // and a half-entered OAuth pair authenticates as nothing at all.
+  const oauthComplete = creds.snykOauthClientId && creds.snykOauthClientSecret;
+  const snykAuth = oauthComplete
+    ? `OAuth 2.0 service account (client ${creds.snykOauthClientId})` +
+      (creds.snykToken ? ' — an API token is also stored, but this wins' : '')
+    : creds.snykOauthClientId || creds.snykOauthClientSecret
+      ? 'INCOMPLETE — an OAuth service account needs both client ID and secret'
+      : creds.snykToken
+        ? 'API token'
+        : 'not set';
+  console.log('  ' + 'Snyk auth:'.padEnd(25) + snykAuth);
   console.log('  GitHub token:            ' + (creds.githubToken ? 'set' : 'not set'));
   console.log('  GitLab token:            ' + (creds.gitlabToken ? 'set' : 'not set'));
   console.log('  Azure DevOps token:      ' + (creds.azureToken ? 'set' : 'not set'));

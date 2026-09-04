@@ -29,6 +29,15 @@ import type { Region } from './regions';
  */
 export interface Credentials {
   snykToken?: string;
+  /**
+   * OAuth 2.0 service account, as an alternative to the API token above.
+   * Stored as the client id and secret rather than an access token: the token
+   * lives an hour, so persisting one would be stale by the next run, while the
+   * credentials that mint it are what a stored login needs. `auth login`
+   * stores one method and clears the other — see removeCredentials.
+   */
+  snykOauthClientId?: string;
+  snykOauthClientSecret?: string;
   githubToken?: string;
   gitlabToken?: string;
   azureToken?: string;
@@ -44,6 +53,8 @@ export interface Credentials {
 /** The env var each stored credential is published to for discovery/import. */
 export const CREDENTIAL_ENV_VARS: Record<keyof Credentials, string> = {
   snykToken: 'SNYK_TOKEN',
+  snykOauthClientId: 'SNYK_OAUTH_CLIENT_ID',
+  snykOauthClientSecret: 'SNYK_OAUTH_CLIENT_SECRET',
   githubToken: 'GITHUB_TOKEN',
   gitlabToken: 'GITLAB_TOKEN',
   azureToken: 'AZURE_TOKEN',
@@ -57,6 +68,8 @@ export const CREDENTIAL_ENV_VARS: Record<keyof Credentials, string> = {
 /** Human-readable name for each credential, used in prompts and summaries. */
 export const CREDENTIAL_LABELS: Record<keyof Credentials, string> = {
   snykToken: 'Snyk API token',
+  snykOauthClientId: 'Snyk OAuth client ID',
+  snykOauthClientSecret: 'Snyk OAuth client secret',
   githubToken: 'GitHub token',
   gitlabToken: 'GitLab token',
   azureToken: 'Azure DevOps token',
@@ -181,6 +194,22 @@ export function setCredentials(creds: Credentials): void {
  */
 export function clearStoredConfig(): void {
   saveConfig({});
+}
+
+/**
+ * Delete specific credentials, leaving the rest alone.
+ *
+ * Exists so choosing one Snyk auth method at login clears the other: with both
+ * an API token and OAuth client credentials stored, which one authenticates is
+ * decided by a precedence rule (see snyk/oauth.ts) rather than by anything the
+ * user chose, and a "logged in as" that depends on a rule nobody read is how
+ * the wrong account ends up importing repositories.
+ */
+export function removeCredentials(keys: Array<keyof Credentials>): void {
+  const config = loadConfig();
+  if (!config.credentials) return;
+  for (const key of keys) delete config.credentials[key];
+  saveConfig(config);
 }
 
 export function setRegion(region: Region): void {

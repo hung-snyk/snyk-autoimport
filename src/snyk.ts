@@ -3,7 +3,7 @@
  * (name/slug -> UUID, failing closed on ambiguity), and integration lookup.
  */
 import { requestsManager } from 'snyk-request-manager';
-import { listIntegrations } from './api';
+import { listIntegrations, snykRequest, statusOf } from './api';
 
 export interface OrgSummary {
   id: string;
@@ -25,15 +25,17 @@ export function makeRequestManager(userAgentPrefix = 'snyk-autoimport'): request
   return new requestsManager({ userAgentPrefix, period: 1000, maxRetryCount: 3 });
 }
 
-/** List every org the token can see, across all groups (v1 GET /orgs). */
+/**
+ * List every org the credential can see, across all groups (v1 GET /orgs).
+ *
+ * Goes through `snykRequest` rather than calling the manager directly so that
+ * OAuth bearer tokens are attached here too — this is the call `auth login`
+ * uses to verify a credential, so a bypass would verify the wrong one.
+ */
 export async function listAllOrgs(rm: requestsManager): Promise<OrgSummary[]> {
-  const res = (await rm.request({
-    verb: 'get',
-    url: '/orgs',
-    body: JSON.stringify({}),
-  })) as { data: V1OrgsResponse; statusCode?: number; status?: number };
+  const res = await snykRequest<V1OrgsResponse>(rm, 'get', '/orgs');
 
-  const statusCode = res.statusCode || res.status;
+  const statusCode = statusOf(res);
   if (statusCode && statusCode !== 200) {
     throw new Error(`Expected 200 listing orgs, got ${statusCode}`);
   }

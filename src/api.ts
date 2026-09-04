@@ -17,7 +17,7 @@ export type {
   PollProgress,
   PollResult,
 } from './snyk/poll';
-export { describeError, formatError } from './snyk/http';
+export { describeError, formatError, snykRequest, statusOf } from './snyk/http';
 export { listIntegrations } from './snyk/integrations';
 export type { IntegrationsMap } from './snyk/integrations';
 export type { Target, ImportTarget, FilePath, Project } from './snyk/types';
@@ -31,6 +31,16 @@ export {
 } from './snyk/imported-targets';
 export type { SnykProject } from './snyk/imported-targets';
 export { SnykProjectOrigin } from './snyk/origins';
+
+// --- Snyk: authentication ---------------------------------------------------
+export {
+  describeSnykAuth,
+  resetSnykOauthCache,
+  resolveSnykAuth,
+  snykAuthHeaders,
+  snykOauthTokenUrl,
+} from './snyk/oauth';
+export type { SnykAuth, SnykAuthMode } from './snyk/oauth';
 
 // --- SCM: repo discovery ----------------------------------------------------
 export { listGithubRepos } from './scm/github';
