@@ -43,6 +43,11 @@ whose client ID and secret are exchanged for a short-lived access token that is
 refreshed automatically. Snyk recommends the latter for automation, since an API
 key never expires.
 
+`SNYK-GOV-01` is the exception: the FedRAMP environment issues no API keys, so it
+requires an OAuth service account. `auth login` selects one automatically for
+that region, and an API token used against it is refused with that reason rather
+than left to fail as a `401`.
+
 The role needs these Organization-level permissions
 ([Pre-defined roles](https://docs.snyk.io/platform-administration/user-management/pre-defined-roles)):
 

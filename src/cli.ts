@@ -35,7 +35,9 @@ import {
 } from './config';
 import {
   DEFAULT_REGION,
+  GOV_REGION,
   REGION_API_HOSTS,
+  REGION_NOTES,
   REGIONS,
   isRegion,
   parseRegion,
@@ -301,6 +303,7 @@ async function promptRegion(config: StoredConfig): Promise<Region | undefined> {
     const notes = [
       name === DEFAULT_REGION ? 'default' : undefined,
       name === current ? 'current' : undefined,
+      REGION_NOTES[name],
     ].filter(Boolean);
     console.log(`  [${i + 1}] ${name}${notes.length ? `  (${notes.join(', ')})` : ''}`);
   });
@@ -346,7 +349,20 @@ type SnykAuthChoice = (typeof SNYK_AUTH_METHODS)[number]['key'];
  * decides it, and an OAuth service account is not something to fall into by
  * accident when a plain token was meant.
  */
-async function promptSnykAuthMethod(existing: Credentials): Promise<SnykAuthChoice> {
+async function promptSnykAuthMethod(
+  existing: Credentials,
+  region: Region,
+): Promise<SnykAuthChoice> {
+  // SNYK-GOV-01 issues no API keys at all, so there is nothing to choose
+  // between. Asking anyway and then rejecting the answer would be a worse
+  // version of simply saying so.
+  if (region === GOV_REGION) {
+    console.log(
+      `\n${GOV_REGION} issues no API tokens, so this uses an OAuth 2.0 service account.`,
+    );
+    return 'oauth';
+  }
+
   const current: SnykAuthChoice | undefined = existing.snykOauthClientId
     ? 'oauth'
     : existing.snykToken
@@ -393,8 +409,11 @@ interface SnykAuthEntry {
  * the precedence rule in snyk/oauth.ts verify a credential the user did not
  * just type.
  */
-async function promptAndVerifySnykAuth(existing: Credentials): Promise<SnykAuthEntry> {
-  const method = await promptSnykAuthMethod(existing);
+async function promptAndVerifySnykAuth(
+  existing: Credentials,
+  region: Region,
+): Promise<SnykAuthEntry> {
+  const method = await promptSnykAuthMethod(existing, region);
   const label = SNYK_AUTH_METHODS.find((m) => m.key === method)?.label ?? method;
   console.log('');
 
@@ -518,7 +537,7 @@ async function authLogin(): Promise<void> {
   // 2. The Snyk credential — API token or OAuth service account — verified
   //    before going any further.
   const creds: Credentials = {};
-  const snykAuth = await promptAndVerifySnykAuth(existing);
+  const snykAuth = await promptAndVerifySnykAuth(existing, effectiveRegion);
   Object.assign(creds, snykAuth.creds);
   // Only what is actually stored needs clearing; listing the rest would report
   // deletions that never happened.

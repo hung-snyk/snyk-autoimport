@@ -23,6 +23,7 @@ import {
   DEFAULT_REGION,
   REGION_API_HOSTS,
   REGIONS,
+  assertAuthAllowedForRegion,
   isRegion,
   type Region,
 } from './regions';
@@ -84,6 +85,10 @@ export function prepareEnv(region?: Region): PreparedEnv {
         'SNYK_OAUTH_CLIENT_SECRET (OAuth 2.0 service account).',
     );
   }
+
+  // Checked against the resolved SNYK_API, not the region name: the variable
+  // can be set directly, and SNYK-GOV-01 accepts no API key either way.
+  assertAuthAllowedForRegion(auth.mode, process.env.SNYK_API);
 
   return { authMode: auth.mode };
 }
