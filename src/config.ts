@@ -69,6 +69,12 @@ export const CREDENTIAL_ENV_VARS: Record<keyof Credentials, string> = {
 export const CREDENTIAL_LABELS: Record<keyof Credentials, string> = {
   snykToken: 'Snyk API token',
   snykOauthClientId: 'Snyk OAuth client ID',
+  // The next line is the prompt label shown to the user ("Snyk OAuth client
+  // secret: "), not a secret. Every value in this map is display text; the
+  // secrets themselves are only ever read from the config file or the
+  // environment. Snyk Code flags it solely because the key name ends in
+  // "Secret", so the finding is suppressed with its reason recorded here.
+  // deepcode ignore HardcodedNonCryptoSecret: display label, not a credential
   snykOauthClientSecret: 'Snyk OAuth client secret',
   githubToken: 'GitHub token',
   gitlabToken: 'GitLab token',
