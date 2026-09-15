@@ -10,7 +10,8 @@
  *                     azure-repos|bitbucket-server|bitbucket-cloud|
  *                     bitbucket-connect-app
  *           --source-org <org-or-group-or-project-or-workspace>
- *           [--source-url <self-hosted-host>]  [--dry-run]  [--yes]
+ *           [--source-url <self-hosted-host>]  [--branch <name>]
+ *           [--exclude <glob,...>]  [--dry-run]  [--yes]
  */
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
@@ -64,6 +65,7 @@ import { filterAlreadyImported } from './dedup';
 import { runImport, mergeOutcomes } from './importer';
 import {
   SOURCES,
+  BRANCH_UNSUPPORTED,
   REQUIRES_SOURCE_URL,
   ACCEPTS_SOURCE_URL,
   KNOWN_UNSUPPORTED,
@@ -75,6 +77,7 @@ import { ask, askSecret, confirm, isInteractive } from './prompt';
 import { verifyScmCredential, type VerifyResult } from './verify';
 import { normalizeSourceUrl, normalizeStoredSourceUrl } from './source-url';
 import { describeDiscovery, type Discovery } from './discovery';
+import { applyTargetFilters, parseExcludePatterns } from './filters';
 import {
   getBitbucketCloudAuth,
   describeError,
@@ -128,6 +131,12 @@ function usesBitbucketCloudAuth(source: string): boolean {
 function usesBitbucketServerAuth(source: string): boolean {
   const token = SOURCES[source].token;
   return 'special' in token && token.special === 'bitbucket-server';
+}
+
+/** Excluded repos, capped: the point is to spot a greedy glob, not to page. */
+function listExcluded(paths: readonly string[], cap = 10): string {
+  const shown = paths.slice(0, cap).join(', ');
+  return paths.length > cap ? `${shown} … and ${paths.length - cap} more` : shown;
 }
 
 /** "a", "a and b", "a, b and c" — for prose that lists a derived set. */
@@ -734,6 +743,10 @@ interface ImportArgs {
   sourceOrg?: string;
   region?: Region;
   sourceUrl?: string;
+  /** Import this branch instead of each repo's default. */
+  branch?: string;
+  /** Glob patterns for repos to leave alone; already flattened and trimmed. */
+  exclude?: string[];
   yes: boolean;
   dryRun: boolean;
 }
@@ -829,6 +842,16 @@ async function importCmd(args: ImportArgs): Promise<void> {
     );
   }
 
+  // Checked before anything is resolved or discovered: a flag this source can
+  // never honour should cost nothing to find out about.
+  const branchProblem = args.branch ? BRANCH_UNSUPPORTED[args.source] : undefined;
+  if (branchProblem) {
+    throw new Error(
+      `--branch is not supported for --source ${args.source}: ${branchProblem}.\n` +
+        'Re-run without --branch to import the default branch of each repository.',
+    );
+  }
+
   prepareEnv(args.region);
   checkSourceCredential(args.source);
 
@@ -852,15 +875,29 @@ async function importCmd(args: ImportArgs): Promise<void> {
   console.log(`✓ Using ${args.source} integration ${integrationId}`);
 
   console.log(`Discovering repos in ${args.sourceOrg}...`);
-  const discovery = await discoverForSource(
+  const discovered = await discoverForSource(
     args.source,
     args.sourceOrg,
     org.id,
     integrationId,
     sourceUrl,
   );
+  // --exclude and --branch are applied here, to every source's discovery at
+  // once, rather than inside each discover*.ts — see filters.ts.
+  const discovery = applyTargetFilters(discovered, {
+    branch: args.branch,
+    exclude: args.exclude,
+  });
   const candidates = discovery.targets;
   console.log(`✓ ${describeDiscovery(discovery)}`);
+  if (discovery.excluded.length > 0) {
+    // Listed, not just counted: a glob that matched more than intended is
+    // invisible in a count, and this is the moment to catch it.
+    console.log(`  Excluded by --exclude: ${listExcluded(discovery.excluded)}`);
+  }
+  if (args.branch) {
+    console.log(`  Importing branch "${args.branch}" rather than each default branch.`);
+  }
 
   const { toImport, alreadyImported } = await filterAlreadyImported(
     rm,
@@ -915,11 +952,16 @@ async function importCmd(args: ImportArgs): Promise<void> {
   });
 
   if (canaryOutcome.kickoffFailures > 0) {
-    printSummary(canaryOutcome, { source: args.source });
+    printSummary(canaryOutcome, { source: args.source, branch: args.branch });
     console.log(
       `\n⚠ The first repo failed to import — stopping before attempting the ` +
         `remaining ${restTargets.length}. A failure this early usually means something ` +
         `systemic (wrong token or integration), which would likely repeat for every repo.\n` +
+        (args.branch
+          ? `It can also mean just this repo has no "${args.branch}" branch, in which ` +
+            `case the rest may import fine — re-run without --branch, or with a branch ` +
+            `they all have.\n`
+          : '') +
         `Fix the issue above, then re-run — already-imported repos are skipped automatically.`,
     );
     return;
@@ -932,7 +974,7 @@ async function importCmd(args: ImportArgs): Promise<void> {
     });
     outcome = mergeOutcomes(canaryOutcome, restOutcome);
   }
-  printSummary(outcome, { source: args.source });
+  printSummary(outcome, { source: args.source, branch: args.branch });
 }
 
 async function integrationsCmd(args: {
@@ -1032,6 +1074,22 @@ async function main(): Promise<void> {
             type: 'string',
             describe: `Self-hosted host URL (required for ${listInProse([...REQUIRES_SOURCE_URL])})`,
           })
+          .option('branch', {
+            type: 'string',
+            describe:
+              "Import this branch instead of each repo's default. A repo without " +
+              'the branch is not rejected by Snyk — it imports as zero projects, ' +
+              'so check the summary. Not available for ' +
+              `${listInProse(Object.keys(BRANCH_UNSUPPORTED))}.`,
+          })
+          .option('exclude', {
+            type: 'string',
+            array: true,
+            describe:
+              "Repos to leave alone: glob patterns where '*' matches anything. " +
+              "A pattern without '/' matches the repo name, one with '/' the full " +
+              "owner/repo path. Repeatable, or comma-separated.",
+          })
           .option('yes', { type: 'boolean', default: false, describe: 'Skip confirmation (for CI)' })
           .option('dry-run', { type: 'boolean', default: false, describe: 'Show the plan; create nothing' }),
       (a) => {
@@ -1043,6 +1101,8 @@ async function main(): Promise<void> {
             sourceOrg: a['source-org'] as string | undefined,
             region: optionalRegion(a.region as string | undefined),
             sourceUrl: a['source-url'] as string | undefined,
+            branch: (a.branch as string | undefined)?.trim() || undefined,
+            exclude: parseExcludePatterns(a.exclude as string[] | undefined),
             yes: a.yes as boolean,
             dryRun: a['dry-run'] as boolean,
           }))();

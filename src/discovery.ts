@@ -49,6 +49,13 @@ export interface Discovery {
   targets: ImportTarget[];
   /** Repos discovered but not offered for import because they are archived. */
   archived: number;
+  /**
+   * Paths of repos set aside by `--exclude`, not just how many: with glob
+   * patterns the first question is always "did my pattern match what I
+   * meant?", and a count cannot answer it. Populated by `applyTargetFilters`
+   * (filters.ts); empty when no patterns were given.
+   */
+  excluded: string[];
 }
 
 /** Shape discovered repos into import targets, setting archived ones aside. */
@@ -60,21 +67,27 @@ export function toDiscovery<R extends { archived?: boolean }>(
   return {
     targets: active.map(toTarget),
     archived: repos.length - active.length,
+    excluded: [],
   };
 }
 
 /**
- * The `✓ Found …` line, with the skipped count only when there is one.
+ * The `✓ Found …` line, with each set-aside reason only when there is one.
  *
  * "N more" is load-bearing. The count before the parenthetical is what will be
- * considered for import, so the archived ones are *in addition* to it — but
+ * considered for import, so the ones set aside are *in addition* to it — but
  * `Found 24 repo(s) (2 archived, skipped)` reads just as naturally as "2 of
  * those 24", which would be wrong. `printSummary` has the same problem and
  * solves it the same way, with "N of those".
  */
 export function describeDiscovery(discovery: Discovery): string {
   const found = `Found ${discovery.targets.length} repo(s)`;
-  return discovery.archived > 0
-    ? `${found} (${discovery.archived} more archived, skipped)`
-    : found;
+  const reasons = [
+    discovery.archived > 0 ? `${discovery.archived} more archived` : undefined,
+    discovery.excluded.length > 0
+      ? `${discovery.excluded.length} more excluded`
+      : undefined,
+  ].filter((reason): reason is string => reason !== undefined);
+
+  return reasons.length > 0 ? `${found} (${reasons.join(', ')}, skipped)` : found;
 }

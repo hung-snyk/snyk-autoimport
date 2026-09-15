@@ -92,9 +92,34 @@ snyk-autoimport` to remove). Examples below use `snyk-autoimport`; substitute
 | `--source` | **Required.** Never inferred, because one organization may have several integrations of the same family. |
 | `--source-org` | The organization, group, workspace or project to import from, depending on the provider. `--github-org` is an accepted alias. |
 | `--source-url` | Host for self-hosted providers (GitHub Enterprise, Bitbucket Server, self-managed GitLab). Only needed if `auth login` has not stored it, or to override the stored one for a single run. |
+| `--branch` | Import this branch instead of each repository's default. Not available for `bitbucket-server`, whose import target has no branch field. |
+| `--exclude` | Repositories to leave alone, as glob patterns where `*` matches anything. A pattern without `/` matches the repository name, one with `/` the full `owner/repo` path. Repeatable, or comma-separated. |
 | `--region` | Overrides the stored region. |
 | `--dry-run` | Show what would be imported and exit, changing nothing. |
 | `--yes` | Skip the confirmation prompt. Required for non-interactive use. |
+
+A branch and an exclusion together, with the excluded repositories listed so a
+pattern can be checked before it is trusted:
+
+```text
+$ snyk-autoimport import --snyk-org "Acme Corp" --source github-cloud-app \
+    --source-org acme-corp --branch develop --exclude 'test-*,*-archive' --dry-run
+
+✓ Found 19 repo(s) (2 more archived, 3 more excluded, skipped)
+  Excluded by --exclude: acme/test-fixtures, acme/test-data, acme/web-archive
+  Importing branch "develop" rather than each default branch.
+```
+
+> [!IMPORTANT]
+> Snyk does **not** reject an import for a branch that does not exist. The job
+> completes and creates no projects — indistinguishable from a repository with
+> no manifests. A `--branch` typo therefore reads as a successful import of
+> nothing, so the summary names both possible causes, and warns when *every*
+> repository produced nothing. Check the branch name if you see that.
+
+Importing a branch does not replace what is already imported: a repository
+already in Snyk on `main` is a separate target from the same repository on
+`develop`, so both are kept and each is deduplicated independently.
 
 ## Example
 

@@ -9,6 +9,15 @@ import { describeTarget } from './target-format';
 export interface ReportContext {
   /** The --source used, so cloud-app 404s can be explained precisely. */
   source: string;
+  /**
+   * The `--branch` override, when one was given.
+   *
+   * Needed because Snyk does NOT reject a target whose branch does not exist:
+   * verified live on 2026-09-15, the import job completes and creates zero
+   * projects, exactly as a repo with no manifests does. Without knowing a
+   * branch was forced, the summary confidently reports the wrong cause.
+   */
+  branch?: string;
 }
 
 export function printSummary(outcome: ImportOutcome, ctx: ReportContext): void {
@@ -25,10 +34,23 @@ export function printSummary(outcome: ImportOutcome, ctx: ReportContext): void {
       ` — ${created} project(s) created`,
   );
   if (outcome.reposWithoutProjects > 0) {
+    // Two indistinguishable causes once --branch is in play, so say both
+    // rather than assert the wrong one. Snyk reports a missing branch as a
+    // clean import of nothing, not as a failure.
+    const cause = ctx.branch
+      ? `had no "${ctx.branch}" branch, or no supported manifests on it`
+      : 'had no supported manifests';
     console.log(
-      `  ${outcome.reposWithoutProjects} of those had no supported manifests, ` +
-        'so produced no projects',
+      `  ${outcome.reposWithoutProjects} of those ${cause}, so produced no projects`,
     );
+    if (ctx.branch && outcome.reposWithoutProjects === outcome.reposImported) {
+      console.log(
+        `  ⚠ Every repo produced nothing, which usually means "${ctx.branch}" does not ` +
+          'exist in them.\n' +
+          '    Snyk accepts an import for a branch that is missing and creates no ' +
+          'projects, so this\n    does not show up as a failure. Check the branch name.',
+      );
+    }
   }
 
   if (outcome.kickoffFailures > 0) {

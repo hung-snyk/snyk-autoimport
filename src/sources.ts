@@ -134,6 +134,24 @@ export const ACCEPTS_SOURCE_URL = new Set(
 );
 
 /**
+ * Sources where `--branch` cannot be honoured, with the reason surfaced in the
+ * error. Bitbucket Server's import target is `{projectKey, repoSlug}` and has
+ * no branch field at all (see discover-bitbucket-server.ts), so there is
+ * nowhere to put one — and adding the key anyway would break dedup as well,
+ * since `generateTargetId` includes `branch` while the targets reconstructed
+ * from Snyk's own projects never carry one for this origin.
+ *
+ * A hard error rather than a silent no-op: someone passing `--branch develop`
+ * and getting every repo's default branch imported instead has been told the
+ * opposite of what happened.
+ */
+export const BRANCH_UNSUPPORTED: Record<string, string> = {
+  'bitbucket-server':
+    'Bitbucket Server import targets have no branch field — Snyk always imports ' +
+    "each repository's default branch for this source",
+};
+
+/**
  * Sources that are deliberately unsupported (not just "not built yet"),
  * with the reason surfaced directly in the error so it doesn't read the
  * same as a plain gap like a source we simply haven't ported yet.
