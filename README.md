@@ -91,7 +91,7 @@ snyk-autoimport` to remove). Examples below use `snyk-autoimport`; substitute
 | `--snyk-org` | Organization name or slug. An ambiguous name fails rather than resolving to an arbitrary match. |
 | `--snyk-org-id` | Organization UUID. Skips name resolution; recommended for automation. |
 | `--source` | **Required.** Never inferred, because one organization may have several integrations of the same family. |
-| `--source-org` | The organization, group, workspace or project to import from, depending on the provider. `--github-org` is an accepted alias. |
+| `--source-org` | The organization, group, workspace or project to import from, depending on the provider. Matched without regard to case. For GitLab this includes subgroups, so a group with `acme/team-a` and `acme/team-b` is fully covered by `--source-org acme`. `--github-org` is an accepted alias. |
 | `--source-url` | Host for self-hosted providers (GitHub Enterprise, Bitbucket Server, self-managed GitLab). Only needed if `auth login` has not stored it, or to override the stored one for a single run. |
 | `--branch` | Import this branch instead of each repository's default. Not available for `bitbucket-server`, whose import target has no branch field. |
 | `--exclude` | Repositories to leave alone, as glob patterns where `*` matches anything. A pattern without `/` matches the repository name, one with `/` the full `owner/repo` path. Repeatable, or comma-separated. |

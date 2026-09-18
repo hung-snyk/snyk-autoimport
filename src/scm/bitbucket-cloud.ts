@@ -92,6 +92,32 @@ function authHeader(config: BitbucketCloudAuthConfig): Record<string, string> {
     : { authorization: `Bearer ${config.token}` };
 }
 
+/**
+ * The next page's url, but only if it is still Bitbucket.
+ *
+ * This is the one provider that pages by following a link the *server* chose,
+ * and every request carries the Authorization header. A `next` pointing
+ * anywhere else would therefore hand the credential to whatever host it named.
+ * Unlikely over TLS against Bitbucket's own API — and cheap enough to refuse
+ * that the question does not need to be weighed each time someone reads this.
+ */
+export function nextPageUrl(next: string | undefined): string | undefined {
+  if (!next) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(next);
+  } catch {
+    throw new Error(`Bitbucket Cloud returned an unreadable next-page url: "${next}".`);
+  }
+  if (parsed.origin !== new URL(API_ROOT).origin) {
+    throw new Error(
+      `Bitbucket Cloud returned a next-page url on another host (${parsed.origin}). ` +
+        'Refusing to send credentials there.',
+    );
+  }
+  return parsed.toString();
+}
+
 export async function listBitbucketCloudRepos(
   config: BitbucketCloudAuthConfig,
   workspace: string,
@@ -119,7 +145,7 @@ export async function listBitbucketCloudRepos(
       });
     }
 
-    url = body.next;
+    url = nextPageUrl(body.next);
   }
 
   return repos;

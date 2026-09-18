@@ -10,6 +10,8 @@ import { requireEnv, scmGet } from './http';
 import type { GithubRepoData } from './types';
 
 const PER_PAGE = 100;
+/** A ceiling on paging, so a server that never returns a short page cannot spin. */
+const MAX_PAGES = 200;
 
 interface GithubApiRepo {
   name: string;
@@ -47,7 +49,7 @@ export async function listGithubRepos(
   const baseUrl = githubBaseUrl(host);
   const repos: GithubRepoData[] = [];
 
-  for (let page = 1; ; page++) {
+  for (let page = 1; page <= MAX_PAGES; page++) {
     const url = `${baseUrl}/orgs/${encodeURIComponent(orgName)}/repos?per_page=${PER_PAGE}&page=${page}`;
     const { body } = await scmGet<GithubApiRepo[]>(
       url,
@@ -72,4 +74,9 @@ export async function listGithubRepos(
 
     if (body.length < PER_PAGE) return repos;
   }
+
+  throw new Error(
+    `GitHub returned more than ${MAX_PAGES * PER_PAGE} repos for "${orgName}" without ` +
+      'reaching the end, which should not happen. Stopping rather than paging forever.',
+  );
 }

@@ -119,6 +119,41 @@ export function checkSourceCredential(source: string): void {
   }
 }
 
+/**
+ * Why there is nothing to import, in the caller's terms.
+ *
+ * Deliberately not one sentence with an "or" in it: each cause has a different
+ * next step — re-run later, loosen the pattern, check the name — and a reader
+ * should not have to work out which of three applies to them.
+ */
+export function describeNothingToImport(
+  discovery: Discovery,
+  alreadyImported: number,
+): string {
+  if (alreadyImported > 0 && discovery.excluded.length > 0) {
+    return (
+      `Nothing to import: ${alreadyImported} repo(s) are already in Snyk and ` +
+      `${discovery.excluded.length} were excluded by --exclude.`
+    );
+  }
+  if (alreadyImported > 0) {
+    return 'Nothing to import. All discovered repos are already in Snyk.';
+  }
+  if (discovery.excluded.length > 0) {
+    return (
+      `Nothing to import: --exclude matched all ${discovery.excluded.length} ` +
+      'discovered repo(s). Loosen the pattern to import any of them.'
+    );
+  }
+  if (discovery.archived > 0) {
+    return (
+      `Nothing to import: all ${discovery.archived} repo(s) found are archived, ` +
+      'and archived repos are skipped.'
+    );
+  }
+  return 'Nothing to import: no importable repos were found. Check --source-org.';
+}
+
 export async function importCmd(args: ImportArgs): Promise<void> {
   if (!args.source) {
     throw new Error(
@@ -228,7 +263,11 @@ export async function importCmd(args: ImportArgs): Promise<void> {
   );
 
   if (toImport.length === 0) {
-    console.log('\nNothing to import. All discovered repos are already in Snyk.');
+    // An empty result has three causes and they need different answers, so
+    // the message names the one that actually applies. Claiming "already in
+    // Snyk" for repos that were excluded, or for a namespace that turned up
+    // nothing, is the same wrong-explanation bug as the --branch summary.
+    console.log(`\n${describeNothingToImport(discovery, alreadyImported)}`);
     return;
   }
 
