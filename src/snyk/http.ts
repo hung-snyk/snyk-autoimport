@@ -59,14 +59,11 @@ export interface ErrorDetail {
 /**
  * Reduce an error message to something safe and short to print.
  *
- * `snyk-request-manager` wraps failures in an error whose `message` is the
- * *inspected* underlying axios error — which includes the outgoing request
- * headers, and therefore `Authorization: token <the real token>`. Printing
- * that message verbatim would leak the credential into a terminal, a CI log,
- * or a pasted bug report.
- *
- * So: first line only, then redact anything that looks like a credential even
- * if it appears there.
+ * First line only, then redact anything credential-shaped. Kept after the
+ * client that made it necessary was replaced: an error message is the one
+ * place a secret has actually leaked in this project's history (the previous
+ * HTTP client inspected the axios error into its message, request headers and
+ * all), and the cost of keeping the guard is two regexes.
  */
 function safeMessage(raw: string): string {
   const firstLine = raw.split('\n')[0].trim();
@@ -84,71 +81,39 @@ function safeMessage(raw: string): string {
   );
 }
 
-/** A JSON:API error entry, which is how Snyk reports the status on a failure. */
-interface JsonApiError {
-  status?: string | number;
-  detail?: string;
-  details?: string;
-  title?: string;
-}
-
 /**
- * Extract status, a human-meaningful message, and the Snyk request id from a
- * thrown error.
+ * Extract status, a printable message, and the Snyk request id from a thrown
+ * error.
  *
- * Deliberately never includes the full response body: it can echo back request
- * headers, and those carry the API token.
+ * Every error this can now see is one of three shapes, all of them ours:
+ * `SnykApiError` (status + detail + request id, from client.ts), `ScmError`
+ * (status + message, from scm/http.ts), or a plain `Error`. This used to also
+ * unpick axios-shaped errors — `err.response.data`, and a JSON:API errors
+ * array on `err.data` whose status was a *string* — because that is what
+ * `snyk-request-manager` threw. Nothing produces those shapes any more, and
+ * carrying the code to parse them implied a hazard that no longer exists.
+ *
+ * `safeMessage` stays, as defence in depth rather than as the load-bearing
+ * protection it once was: the reason this function never touches a response
+ * body is that the old client's error messages embedded the request headers,
+ * token included. Ours never do.
  */
 export function describeError(error: unknown): ErrorDetail {
   const err = error as {
     message?: string;
     status?: number;
     statusCode?: number;
-    data?: { message?: string; code?: number; errors?: JsonApiError[] };
-    response?: {
-      status?: number;
-      statusCode?: number;
-      headers?: Record<string, string | undefined>;
-      data?: { message?: string; errors?: JsonApiError[] } | string;
-    };
+    requestId?: string;
   };
 
-  const res = err?.response;
-  // The wrapped request-manager error carries neither `status` nor `response`;
-  // its only structured signal is a JSON:API errors array on `data`, whose
-  // status is a *string*.
-  const jsonApi =
-    err?.data?.errors?.[0] ??
-    (typeof res?.data === 'object' ? res?.data?.errors?.[0] : undefined);
-  const jsonApiStatus =
-    jsonApi?.status === undefined ? undefined : Number(jsonApi.status);
-
-  const status =
-    err?.data?.code ??
-    err?.status ??
-    err?.statusCode ??
-    res?.status ??
-    res?.statusCode ??
-    (Number.isFinite(jsonApiStatus) ? jsonApiStatus : undefined);
-
-  const headers = res?.headers ?? {};
-  const requestId =
-    headers['snyk-request-id'] ?? headers['x-request-id'] ?? headers['request-id'];
-
-  const bodyMessage =
-    (typeof res?.data === 'object' ? res?.data?.message : undefined) ??
-    (typeof res?.data === 'string' ? res.data : undefined);
-
-  const raw =
-    err?.data?.message ??
-    jsonApi?.detail ??
-    jsonApi?.details ??
-    jsonApi?.title ??
-    bodyMessage ??
-    err?.message ??
-    'Unknown error';
-
-  return { status, message: safeMessage(raw), requestId };
+  const status = err?.status ?? err?.statusCode;
+  // A network failure is reported as status 0 (see client.ts), which is not a
+  // status worth printing — `formatError` would render it as "0: ...".
+  return {
+    status: status === 0 ? undefined : status,
+    message: safeMessage(err?.message ?? 'Unknown error'),
+    requestId: err?.requestId,
+  };
 }
 
 /** One-line summary suitable for showing a user, e.g. "401: Invalid auth". */

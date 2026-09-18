@@ -28,6 +28,19 @@ import type { PollImportResponse, Project } from './types';
 const FIRST_POLL_INTERVAL_MS = 2_000;
 const MAX_POLL_INTERVAL_MS = 20_000;
 const MAX_POLL_ATTEMPTS = 1_000;
+/**
+ * Give up on a single job after this long.
+ *
+ * The attempt count alone was not a usable ceiling: 1,000 attempts at the 20s
+ * cap is about five and a half hours, so a job Snyk never finishes held the
+ * command open until whatever timeout wrapped it — a CI job's, or none. Two
+ * hours is well beyond any import observed (minutes), and expressed in
+ * wall-clock time because that is the thing a caller is actually budgeting.
+ *
+ * Reaching it is reported as a poll failure, not a success: the job may still
+ * be running server-side, and its projects may yet appear.
+ */
+const MAX_POLL_DURATION_MS = 2 * 60 * 60 * 1_000;
 const POLL_CONCURRENCY = 10;
 /** How often to report that a long import is still running. */
 const PROGRESS_INTERVAL_MS = 15_000;
@@ -74,6 +87,8 @@ export interface PollOptions {
   /** Fixed interval; omit to use the backoff described above. */
   intervalMs?: number;
   maxAttempts?: number;
+  /** Wall-clock ceiling for one job. Tests use a tiny value. */
+  maxDurationMs?: number;
   /**
    * Called periodically while jobs are still running, so a caller can show
    * that a slow import is alive rather than hung. Driven by its own timer,
@@ -94,10 +109,20 @@ export async function pollImportUrl(
     throw new Error('Missing required parameter: location url.');
   }
   const maxAttempts = options.maxAttempts ?? MAX_POLL_ATTEMPTS;
+  const maxDuration = options.maxDurationMs ?? MAX_POLL_DURATION_MS;
   const path = toPollingPath(locationUrl);
+  const startedAt = Date.now();
   let wait = options.intervalMs ?? FIRST_POLL_INTERVAL_MS;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const elapsed = Date.now() - startedAt;
+    if (elapsed >= maxDuration) {
+      throw new Error(
+        `Import job did not complete within ${Math.round(elapsed / 60_000)} minute(s). ` +
+          'It may still be running — re-run to pick up whatever it created.',
+      );
+    }
+
     const res = await snykRequest<PollImportResponse>(client, 'get', path);
 
     const status = statusOf(res);

@@ -2,13 +2,18 @@
  * Resolving the Snyk org named on the command line, shared by `import` and
  * `integrations`.
  *
+ * Takes the run's client rather than building its own: pacing is per client
+ * (see client.ts), so a second client means a second rate-limit budget, and
+ * two of them would quietly double the request rate this tool promises.
+ *
  * Kept in its own module because both commands need it and neither owns it.
  * The fail-closed behaviour it implements — never guess between two orgs with
  * the same name — is the core safety property of the tool (NOTES §5).
  */
 import { assertValidOrgId } from '../org-id';
 import { ask, isInteractive } from '../prompt';
-import { formatOrgMatch, makeSnykApiClient, resolveOrg } from '../snyk';
+import { formatOrgMatch, resolveOrg } from '../snyk';
+import type { SnykClient } from '../snyk/client';
 import type { OrgSummary } from '../snyk';
 
 /**
@@ -17,11 +22,14 @@ import type { OrgSummary } from '../snyk';
  * stale mapping can never silently override current access or a genuinely
  * new ambiguity.
  */
-export async function resolveTargetOrg(args: {
-  snykOrgId?: string;
-  snykOrg?: string;
-  yes: boolean;
-}): Promise<OrgSummary> {
+export async function resolveTargetOrg(
+  client: SnykClient,
+  args: {
+    snykOrgId?: string;
+    snykOrg?: string;
+    yes: boolean;
+  },
+): Promise<OrgSummary> {
   if (args.snykOrgId) {
     assertValidOrgId(args.snykOrgId, '--snyk-org-id');
     return { id: args.snykOrgId, name: args.snykOrgId };
@@ -30,8 +38,7 @@ export async function resolveTargetOrg(args: {
     throw new Error('Provide --snyk-org "<name>" or --snyk-org-id <uuid>.');
   }
 
-  const rm = makeSnykApiClient();
-  const result = await resolveOrg(rm, args.snykOrg);
+  const result = await resolveOrg(client, args.snykOrg);
 
   if (result.status === 'resolved' && result.org) {
     console.log(

@@ -7,7 +7,6 @@
 import { describeError, formatError, resetSnykOauthCache } from '../api';
 import { CREDENTIAL_ENV_VARS, CREDENTIAL_KEYS, CREDENTIAL_LABELS, configFilePath, credentialKeyForEnvVar, legacyConfigFilePath, loadConfig, removeCredentials, setCredentials, setRegion, setSourceUrl, storedSourceUrl, usingLegacyConfig } from '../config';
 import type { Credentials, StoredConfig } from '../config';
-import type { Discovery } from '../discovery';
 import { ask, askSecret, confirm, isInteractive } from '../prompt';
 import { DEFAULT_REGION, GOV_REGION, REGIONS, REGION_API_HOSTS, REGION_NOTES, isRegion, parseRegion } from '../regions';
 import type { Region } from '../regions';

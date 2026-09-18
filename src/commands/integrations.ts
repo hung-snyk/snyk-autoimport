@@ -16,8 +16,8 @@ export async function integrationsCmd(args: {
   region?: Region;
 }): Promise<void> {
   prepareEnv(args.region); // needs SNYK_TOKEN only
-  const org = await resolveTargetOrg({ ...args, yes: false });
   const rm = makeSnykApiClient('snyk-autoimport:integrations');
+  const org = await resolveTargetOrg(rm, { ...args, yes: false });
   const map = await listIntegrationsMap(rm, org.id);
   const entries = Object.entries(map);
   console.log(`Integrations configured on ${org.name} (${org.id}):`);

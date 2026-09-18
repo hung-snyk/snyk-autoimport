@@ -172,10 +172,11 @@ export async function importCmd(args: ImportArgs): Promise<void> {
   prepareEnv(args.region);
   checkSourceCredential(args.source);
 
-  const org = await resolveTargetOrg(args);
-
+  // One client for the whole run: org resolution, the integration lookup,
+  // dedup, the import and the polling all share its pacing budget.
   const rm = makeSnykApiClient('snyk-autoimport:import');
-  const { id: integrationId, available } = await resolveIntegration(
+  const org = await resolveTargetOrg(rm, args);
+  const { id: integrationId } = await resolveIntegration(
     rm,
     org.id,
     args.source,

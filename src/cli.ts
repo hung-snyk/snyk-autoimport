@@ -59,7 +59,7 @@ async function main(): Promise<void> {
         }),
       (a) => {
         pending = (async () => {
-          const action = a.action as string;
+          const action = a.action;
           if (action === 'login') await authLogin();
           else if (action === 'logout') {
             clearStoredConfig();
@@ -80,9 +80,9 @@ async function main(): Promise<void> {
       (a) => {
         pending = (async () =>
           integrationsCmd({
-            snykOrg: a['snyk-org'] as string | undefined,
-            snykOrgId: a['snyk-org-id'] as string | undefined,
-            region: optionalRegion(a.region as string | undefined),
+            snykOrg: a['snyk-org'],
+            snykOrgId: a['snyk-org-id'],
+            region: optionalRegion(a.region),
           }))();
       },
     )
@@ -131,16 +131,16 @@ async function main(): Promise<void> {
       (a) => {
         pending = (async () =>
           importCmd({
-            source: a.source as string | undefined,
-            snykOrg: a['snyk-org'] as string | undefined,
-            snykOrgId: a['snyk-org-id'] as string | undefined,
-            sourceOrg: a['source-org'] as string | undefined,
-            region: optionalRegion(a.region as string | undefined),
-            sourceUrl: a['source-url'] as string | undefined,
-            branch: (a.branch as string | undefined)?.trim() || undefined,
+            source: a.source,
+            snykOrg: a['snyk-org'],
+            snykOrgId: a['snyk-org-id'],
+            sourceOrg: a['source-org'],
+            region: optionalRegion(a.region),
+            sourceUrl: a['source-url'],
+            branch: a.branch?.trim() || undefined,
             exclude: parseExcludePatterns(a.exclude as string[] | undefined),
-            yes: a.yes as boolean,
-            dryRun: a['dry-run'] as boolean,
+            yes: a.yes,
+            dryRun: a['dry-run'],
           }))();
       },
     )

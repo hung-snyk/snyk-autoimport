@@ -26,6 +26,19 @@
  * their own concurrency (CONCURRENT_IMPORTS for kickoff, POLL_CONCURRENCY for
  * polling), so what is needed here is a ceiling on how fast requests *start* —
  * the same job the manager's leaky bucket did, with the same numbers.
+ *
+ * A NOTE ON RETRYING POSTS
+ *
+ * The retry below applies to `POST .../import` as well as to reads, and that
+ * is not idempotent in principle: a 5xx returned *after* Snyk created the job
+ * means the retry submits the same target twice. It is kept anyway, for two
+ * reasons. The previous client behaved identically, so this is not a new
+ * exposure. And the consequence is bounded: Snyk deduplicates projects
+ * server-side (verified live — re-importing an imported repo creates nothing),
+ * so the visible effect is two job URLs for one repo, which inflates
+ * `reposImported` in the summary rather than creating anything twice. Dropping
+ * the retry would trade that rare miscount for real lost imports on every
+ * transient 502, which is the worse deal.
  */
 import { snykAuthHeaders } from './oauth';
 
@@ -49,14 +62,20 @@ export interface SnykResponse<T> {
   headers?: Record<string, string | string[] | undefined>;
 }
 
-/** One Snyk API call. Mirrors what the manager accepted, minus the queueing. */
+/**
+ * One Snyk API call.
+ *
+ * Deliberately has no per-request `headers`: the previous client accepted them
+ * and nothing set them, and a caller passing a lowercase `authorization`
+ * alongside the `Authorization` set below would have produced two keys, one of
+ * which silently wins. Authentication belongs to the client alone.
+ */
 export interface SnykRequestSpec {
   verb: 'get' | 'post';
   /** Path relative to the version base, e.g. `/orgs` or `/org/{id}/import`. */
   url: string;
   /** Pre-serialised JSON, as the previous client expected. */
   body?: string;
-  headers?: Record<string, string>;
   /** Use the REST base (`/rest`) rather than v1. */
   useRESTApi?: boolean;
 }
@@ -208,7 +227,7 @@ class HttpSnykClient implements SnykClient {
   private readonly baseBackoff: number;
   private readonly userAgent: string;
 
-  constructor(private readonly options: SnykClientOptions = {}) {
+  constructor(options: SnykClientOptions = {}) {
     this.limiter = new RateLimiter(options.burst ?? BURST, options.periodMs ?? PERIOD_MS);
     this.maxAttempts = options.maxAttempts ?? MAX_ATTEMPTS;
     this.baseBackoff = options.baseBackoffMs ?? BASE_BACKOFF_MS;
@@ -230,7 +249,6 @@ class HttpSnykClient implements SnykClient {
         spec.useRESTApi && spec.body ? 'application/vnd.api+json' : 'application/json',
       'user-agent': this.userAgent,
       ...(auth ?? (token ? { Authorization: `token ${token}` } : {})),
-      ...spec.headers,
     };
 
     let lastError = 'unknown error';
