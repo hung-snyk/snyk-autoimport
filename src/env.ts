@@ -2,7 +2,7 @@
  * Bridge stored config -> process.env.
  *
  * Everything downstream reads its configuration from env vars: each `scm/`
- * module reads its provider's credential vars, `snyk-request-manager` takes
+ * module reads its provider's credential vars, the Snyk client takes
  * `SNYK_TOKEN` and `SNYK_API`, and the import paces itself with
  * `CONCURRENT_IMPORTS`. The whole point of this tool is that the user never
  * sets those by hand — we publish them here from the credential store.

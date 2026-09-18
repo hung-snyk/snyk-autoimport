@@ -5,7 +5,7 @@
  * and returns per-target kickoff failures rather than aborting the batch.
  * `pollImportUrls` then waits for each job and returns the project results.
  */
-import type { requestsManager } from 'snyk-request-manager';
+import type { SnykClient } from './snyk/client';
 import { importTargets, pollImportUrls, type ImportTarget, type PollProgress } from './api';
 import type { FailureEntry } from './failures';
 
@@ -37,12 +37,12 @@ export interface RunOptions {
 }
 
 export async function runImport(
-  rm: requestsManager,
+  client: SnykClient,
   targets: ImportTarget[],
   options: RunOptions = {},
 ): Promise<ImportOutcome> {
-  const { pollingUrls, failures } = await importTargets(rm, targets);
-  const { projects, failed, pollFailures, perJob } = await pollImportUrls(rm, pollingUrls, {
+  const { pollingUrls, failures } = await importTargets(client, targets);
+  const { projects, failed, pollFailures, perJob } = await pollImportUrls(client, pollingUrls, {
     onProgress: options.onProgress,
   });
 

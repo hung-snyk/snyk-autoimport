@@ -9,16 +9,15 @@
  *
  * HOW THE TOKEN REACHES THE WIRE
  *
- * `snyk-request-manager` can send a bearer token itself — it reads
- * `SNYK_OAUTH_TOKEN` — but only once, in its constructor. One manager is
- * created per run and held across discovery, import and polling, so a token
- * that expired mid-run could never be replaced. Instead the header is set
- * per-request (`snykRequest` in http.ts), which the manager supports: a
- * request's own headers are merged over its defaults, so `Authorization` here
- * wins. Every request then gets whatever token is current at that moment.
+ * `snykAuthHeaders` is called by client.ts on every request, not once per
+ * client, so a token refreshed part-way through a long run takes effect on the
+ * next call. That mattered more than it sounds: the previous HTTP client
+ * (`snyk-request-manager`) read `SNYK_OAUTH_TOKEN` only in its constructor,
+ * and one client is held across discovery, import and polling — so a token
+ * that expired mid-run could never have been replaced.
  *
- * An API token needs none of this — the manager reads `SNYK_TOKEN` per its own
- * rules — so `snykAuthHeaders` returns nothing in that mode and leaves it be.
+ * In API-token mode this returns nothing and the client falls back to
+ * `SNYK_TOKEN` with the `token` scheme.
  */
 
 const DEFAULT_API_ORIGIN = 'https://api.snyk.io';

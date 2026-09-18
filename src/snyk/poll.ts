@@ -10,7 +10,7 @@
  * error — so results are reported per job as well as per project, letting the
  * summary count repositories and still call out the ones that yielded nothing.
  */
-import type { requestsManager } from 'snyk-request-manager';
+import type { SnykClient } from './client';
 import { mapWithConcurrency, sleep } from './async';
 import { describeError, formatError, snykRequest, statusOf } from './http';
 import { toPollingPath } from './import';
@@ -86,7 +86,7 @@ export interface PollOptions {
 
 /** Poll one job until it reports `complete`, then return its projects. */
 export async function pollImportUrl(
-  rm: requestsManager,
+  client: SnykClient,
   locationUrl: string,
   options: PollOptions = {},
 ): Promise<Project[]> {
@@ -98,7 +98,7 @@ export async function pollImportUrl(
   let wait = options.intervalMs ?? FIRST_POLL_INTERVAL_MS;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const res = await snykRequest<PollImportResponse>(rm, 'get', path);
+    const res = await snykRequest<PollImportResponse>(client, 'get', path);
 
     const status = statusOf(res);
     if (status && status !== 200) {
@@ -127,7 +127,7 @@ export async function pollImportUrl(
  * one unreachable job does not discard results already collected from others.
  */
 export async function pollImportUrls(
-  rm: requestsManager,
+  client: SnykClient,
   locationUrls: readonly string[],
   options: PollOptions = {},
 ): Promise<PollResult> {
@@ -159,7 +159,7 @@ export async function pollImportUrls(
       try {
         let jobCreated = 0;
         let jobFailed = 0;
-        for (const project of await pollImportUrl(rm, locationUrl, options)) {
+        for (const project of await pollImportUrl(client, locationUrl, options)) {
           if (project.success) {
             projects.push(project);
             jobCreated++;

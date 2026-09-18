@@ -20,6 +20,21 @@ export interface ReportContext {
   branch?: string;
 }
 
+/**
+ * Did anything in this run fail?
+ *
+ * Separate from printing, because the exit code depends on it and the two must
+ * agree: a summary that lists failures while the process exits 0 tells a CI
+ * pipeline the run succeeded. A repo that imported but produced no projects is
+ * deliberately NOT a failure — that is a legitimate outcome for a repo with no
+ * manifests, and treating it as one would fail most real runs. The zero-project
+ * case is surfaced in the summary text instead (and with --branch, warned about
+ * loudly), which is the right place for something ambiguous.
+ */
+export function hasFailures(outcome: ImportOutcome): boolean {
+  return outcome.kickoffFailures > 0 || outcome.failedProjects.length > 0;
+}
+
 export function printSummary(outcome: ImportOutcome, ctx: ReportContext): void {
   const created = outcome.createdProjects.length;
   const failed = outcome.failedProjects.length;

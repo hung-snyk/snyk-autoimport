@@ -1,47 +1,34 @@
 /**
- * Thin, typed layer over `snyk-request-manager`.
+ * Response helpers and error description for Snyk calls.
  *
- * The request manager already handles queueing, pacing and retries, so this
- * only normalises the two things its callers actually need: reading a status
- * code / header off a response whose shape varies by client, and turning a
- * thrown request error into a short, credential-free description.
+ * The client itself lives in client.ts. This is the layer above it: reading a
+ * status or header off a response whose shape varies between the real client
+ * and a test double, and turning a thrown request error into a short,
+ * credential-free description.
  */
-import type { requestsManager } from 'snyk-request-manager';
-import { snykAuthHeaders } from './oauth';
+import type { SnykClient, SnykResponse } from './client';
 
-/** Axios-shaped response, with the field aliases the manager can return. */
-export interface SnykResponse<T> {
-  data: T;
-  status?: number;
-  statusCode?: number;
-  headers?: Record<string, string | string[] | undefined>;
-}
+export type { SnykResponse };
 
 /**
- * `useRest` switches the request manager from the v1 base to the REST base
- * (`/rest/`), which it derives from the same configured host — so the region
- * stays correct either way.
+ * Every Snyk call in this tool goes through here.
  *
- * Every Snyk call in this tool goes through here, which is what makes it the
- * right place to attach an OAuth bearer token: the manager merges a request's
- * own headers over its defaults, so this overrides whatever it would have
- * sent, and a token refreshed mid-run takes effect on the next request rather
- * than being pinned at construction. In API-token mode nothing is attached and
- * the manager's own `SNYK_TOKEN` handling applies — see oauth.ts.
+ * `useRest` switches from the v1 base to the REST base (`/rest`), which the
+ * client derives from the same configured host — so the region stays correct
+ * either way. Authentication is resolved inside the client, per request, so a
+ * short-lived OAuth token can be refreshed mid-run (see oauth.ts).
  */
 export async function snykRequest<T>(
-  rm: requestsManager,
+  client: SnykClient,
   verb: 'get' | 'post',
   url: string,
   body: unknown = {},
   useRest = false,
 ): Promise<SnykResponse<T>> {
-  const headers = await snykAuthHeaders();
-  return (await rm.request({
+  return (await client.request({
     verb,
     url,
     body: JSON.stringify(body),
-    ...(headers ? { headers } : {}),
     ...(useRest ? { useRESTApi: true } : {}),
   })) as SnykResponse<T>;
 }

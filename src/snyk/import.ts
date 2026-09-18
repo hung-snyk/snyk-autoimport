@@ -12,7 +12,7 @@
  * file. It also called `process.exit(1)` when a run of targets all failed,
  * which is not a decision a library should make for its caller.
  */
-import type { requestsManager } from 'snyk-request-manager';
+import type { SnykClient } from './client';
 import { mapWithConcurrency } from './async';
 import { describeError, formatError, headerOf, snykRequest, statusOf } from './http';
 import type { ImportTarget, Target } from './types';
@@ -80,7 +80,7 @@ export function toPollingPath(locationUrl: string): string {
 }
 
 export async function importTarget(
-  rm: requestsManager,
+  client: SnykClient,
   { orgId, integrationId, target, files, exclusionGlobs }: ImportTarget,
 ): Promise<string> {
   if (!orgId || !integrationId || Object.keys(target).length === 0) {
@@ -90,7 +90,7 @@ export async function importTarget(
   }
 
   const res = await snykRequest<{ location?: string; pollingUrl?: string }>(
-    rm,
+    client,
     'post',
     `/org/${orgId.trim()}/integrations/${integrationId}/import`,
     { target: requestTarget(target), files, exclusionGlobs },
@@ -117,7 +117,7 @@ export async function importTarget(
  * unreachable repo should not abandon the rest of the batch.
  */
 export async function importTargets(
-  rm: requestsManager,
+  client: SnykClient,
   targets: readonly ImportTarget[],
 ): Promise<ImportKickoffResult> {
   const pollingUrls: string[] = [];
@@ -125,7 +125,7 @@ export async function importTargets(
 
   await mapWithConcurrency(targets, concurrentImports(), async (t) => {
     try {
-      pollingUrls.push(await importTarget(rm, t));
+      pollingUrls.push(await importTarget(client, t));
     } catch (error) {
       const detail = describeError(error);
       failures.push({

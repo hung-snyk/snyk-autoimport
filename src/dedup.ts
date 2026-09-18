@@ -12,7 +12,7 @@
  * harmless — the re-import creates nothing — and is accepted rather than
  * worked around with a machine-local log, which would be useless in CI.
  */
-import type { requestsManager } from 'snyk-request-manager';
+import type { SnykClient } from './snyk/client';
 import {
   generateTargetId,
   listImportedTargets,
@@ -26,12 +26,12 @@ export interface DedupResult {
 }
 
 export async function filterAlreadyImported(
-  rm: requestsManager,
+  client: SnykClient,
   orgId: string,
   candidates: ImportTarget[],
   origin: SnykProjectOrigin,
 ): Promise<DedupResult> {
-  const existing = await listImportedTargets(rm, orgId, [origin]);
+  const existing = await listImportedTargets(client, orgId, [origin]);
 
   // The integration id is constant across this run, so it cancels out of both
   // sides of the comparison; what matters is the org plus the target itself.

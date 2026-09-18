@@ -18,6 +18,8 @@ export type {
   PollResult,
 } from './snyk/poll';
 export { describeError, formatError, snykRequest, statusOf } from './snyk/http';
+export { makeSnykClient, snykApiBases, SnykApiError } from './snyk/client';
+export type { SnykClient, SnykResponse } from './snyk/client';
 export { listIntegrations } from './snyk/integrations';
 export type { IntegrationsMap } from './snyk/integrations';
 export type { Target, ImportTarget, FilePath, Project } from './snyk/types';

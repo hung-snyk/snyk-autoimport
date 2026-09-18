@@ -1,8 +1,8 @@
 /**
- * Thin adapters over Snyk APIs: a shared requestsManager, org resolution
+ * Thin adapters over Snyk APIs: a shared SnykClient, org resolution
  * (name/slug -> UUID, failing closed on ambiguity), and integration lookup.
  */
-import { requestsManager } from 'snyk-request-manager';
+import { makeSnykClient, type SnykClient } from './snyk/client';
 import { listIntegrations, snykRequest, statusOf } from './api';
 
 export interface OrgSummary {
@@ -21,19 +21,20 @@ interface V1OrgsResponse {
   }>;
 }
 
-export function makeRequestManager(userAgentPrefix = 'snyk-autoimport'): requestsManager {
-  return new requestsManager({ userAgentPrefix, period: 1000, maxRetryCount: 3 });
+/** The shared Snyk client for a run. Named for what callers do with it. */
+export function makeSnykApiClient(userAgentPrefix = 'snyk-autoimport'): SnykClient {
+  return makeSnykClient(userAgentPrefix);
 }
 
 /**
  * List every org the credential can see, across all groups (v1 GET /orgs).
  *
- * Goes through `snykRequest` rather than calling the manager directly so that
- * OAuth bearer tokens are attached here too — this is the call `auth login`
- * uses to verify a credential, so a bypass would verify the wrong one.
+ * Goes through `snykRequest` like every other call, so authentication is
+ * resolved the one way — this is the call `auth login` verifies a credential
+ * with, and a bypass here would verify something other than what imports use.
  */
-export async function listAllOrgs(rm: requestsManager): Promise<OrgSummary[]> {
-  const res = await snykRequest<V1OrgsResponse>(rm, 'get', '/orgs');
+export async function listAllOrgs(client: SnykClient): Promise<OrgSummary[]> {
+  const res = await snykRequest<V1OrgsResponse>(client, 'get', '/orgs');
 
   const statusCode = statusOf(res);
   if (statusCode && statusCode !== 200) {
@@ -64,10 +65,10 @@ export function formatOrgMatch(m: OrgSummary): string {
  * caller can prompt or hard-fail. A slug match is treated as unique.
  */
 export async function resolveOrg(
-  rm: requestsManager,
+  client: SnykClient,
   query: string,
 ): Promise<OrgResolution> {
-  const orgs = await listAllOrgs(rm);
+  const orgs = await listAllOrgs(client);
 
   const bySlug = orgs.filter((o) => o.slug && o.slug === query);
   if (bySlug.length === 1) return { status: 'resolved', org: bySlug[0] };
@@ -83,10 +84,10 @@ export async function resolveOrg(
 
 /** Full map of integration type -> id configured on an org. */
 export async function listIntegrationsMap(
-  rm: requestsManager,
+  client: SnykClient,
   orgId: string,
 ): Promise<Record<string, string>> {
-  return (await listIntegrations(rm, orgId)) as Record<string, string>;
+  return (await listIntegrations(client, orgId)) as Record<string, string>;
 }
 
 /**
@@ -118,10 +119,10 @@ export function describeMissingIntegration(
  * show what *is* configured when the requested type is missing).
  */
 export async function resolveIntegration(
-  rm: requestsManager,
+  client: SnykClient,
   orgId: string,
   source: string,
 ): Promise<{ id?: string; available: Record<string, string> }> {
-  const available = await listIntegrationsMap(rm, orgId);
+  const available = await listIntegrationsMap(client, orgId);
   return { id: available[source], available };
 }

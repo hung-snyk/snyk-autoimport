@@ -15,7 +15,7 @@
  * no duplicates), while one that makes a repo look *already imported* silently
  * skips a repo the user asked for. Faithful beats clever here.
  */
-import type { requestsManager } from 'snyk-request-manager';
+import type { SnykClient } from './client';
 import { snykRequest, statusOf, type SnykResponse } from './http';
 import { SnykProjectOrigin } from './origins';
 import type { Target } from './types';
@@ -67,7 +67,7 @@ export function restPathFrom(next: string): string {
 
 /** Every project in an org, optionally narrowed to one origin. */
 export async function listSnykProjects(
-  rm: requestsManager,
+  client: SnykClient,
   orgId: string,
   origin?: string,
 ): Promise<SnykProject[]> {
@@ -82,7 +82,7 @@ export async function listSnykProjects(
 
   while (path) {
     const res: SnykResponse<RestProjectsPage> = await snykRequest<RestProjectsPage>(
-      rm,
+      client,
       'get',
       path,
       {},
@@ -177,7 +177,7 @@ export function projectToTarget(project: SnykProject): Target | undefined {
  * projects and one target — so the result is deduplicated by the caller's key.
  */
 export async function listImportedTargets(
-  rm: requestsManager,
+  client: SnykClient,
   orgId: string,
   origins: readonly SnykProjectOrigin[],
 ): Promise<Target[]> {
@@ -185,7 +185,7 @@ export async function listImportedTargets(
   // practice dedup passes exactly one.
   const wanted = new Set<string>(origins);
   const pages = await Promise.all(
-    origins.map((origin) => listSnykProjects(rm, orgId, origin)),
+    origins.map((origin) => listSnykProjects(client, orgId, origin)),
   );
 
   const targets: Target[] = [];

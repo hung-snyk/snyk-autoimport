@@ -6,13 +6,13 @@
  * than one SCM integration configured, which is why callers must say which
  * `--source` they mean rather than the tool guessing.
  */
-import type { requestsManager } from 'snyk-request-manager';
+import type { SnykClient } from './client';
 import { snykRequest, statusOf } from './http';
 
 export type IntegrationsMap = Record<string, string>;
 
 export async function listIntegrations(
-  rm: requestsManager,
+  client: SnykClient,
   orgId: string,
 ): Promise<IntegrationsMap> {
   if (!orgId) {
@@ -20,7 +20,7 @@ export async function listIntegrations(
   }
 
   const res = await snykRequest<IntegrationsMap>(
-    rm,
+    client,
     'get',
     `/org/${orgId.trim()}/integrations`,
   );

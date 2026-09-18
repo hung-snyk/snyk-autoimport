@@ -10,8 +10,9 @@ inspection that bulk importing otherwise requires.
 
 **Self-contained.** The tool talks directly to Snyk's documented
 [Import API](https://docs.snyk.io/developer-tools/snyk-api/reference/import-projects-v1)
-and to each provider's public REST API. Three runtime dependencies, no HTTP
-client or provider SDKs — discovery uses the Node runtime's built-in `fetch`.
+and to each provider's public REST API. Two runtime dependencies, no HTTP
+client and no provider SDKs — every call, to Snyk and to all five SCMs, goes
+through the Node runtime's built-in `fetch`.
 
 > **Support notice** — an independent, community project. **Not** an official
 > Snyk product, and not covered by Snyk support or any Snyk service agreement.
@@ -133,7 +134,8 @@ Which Snyk region is your account on?
   [2] snyk-us-02
   [3] snyk-eu-01
   [4] snyk-au-01
-Pick one (1-4 or name) [blank keeps snyk-us-01]:
+  [5] snyk-gov-01  (Snyk for Government (US) — OAuth service account only)
+Pick one (1-5 or name) [blank keeps snyk-us-01]:
 
 How will you authenticate to Snyk?
   [1] Snyk API token
@@ -256,3 +258,9 @@ cannot outlive its credential.
 Deduplication runs against live Snyk state every time, so this is safe to run on
 a schedule to pick up new repositories. Budget wall-clock time rather than a
 fixed timeout: the run lasts as long as Snyk takes to scan everything submitted.
+
+The exit code is meaningful: **0** when everything submitted imported, **1**
+when any repository failed to start or any project failed during import, and
+**1** for a usage or credential error. A repository that imports successfully
+but contains no supported manifests is not a failure — it is reported in the
+summary and leaves the exit code at 0.
