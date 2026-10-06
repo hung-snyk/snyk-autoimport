@@ -29,6 +29,7 @@ interface BitbucketServerApiRepo {
    * Read from the documented field shape; not yet seen from a live server.
    */
   archived?: boolean;
+  links?: { self?: Array<{ href?: string }> };
 }
 
 interface BitbucketServerPage {
@@ -98,6 +99,7 @@ export async function listBitbucketServerRepos(
         projectKey: repo.project.key,
         repoSlug: repo.slug ?? repo.name,
         archived: repo.archived ?? false,
+        url: repo.links?.self?.[0]?.href,
       });
     }
 

@@ -112,7 +112,26 @@ export interface StoredConfig {
      * can contain a name that is no longer valid, so readers validate it.
      */
     region?: string;
+    /**
+     * Repos to leave alone on every run, so a standing policy — "never import
+     * our fixtures, never import this one repo" — does not have to be retyped
+     * as `--exclude` each time, or remembered by whoever runs the command.
+     *
+     * Two kinds, kept apart rather than guessed between: `names` match the
+     * repo name or its owner/path, `urls` match the repo's web address. A
+     * plain array is accepted as shorthand for `names`, because that is the
+     * common case and the shorthand is what people write first.
+     */
+    exclude?: ExcludeRules | string[];
   };
+}
+
+/** Standing exclusions, from the config file. Both lists take `*` globs. */
+export interface ExcludeRules {
+  /** Matched against the repo name, or `owner/repo` when the pattern has a `/`. */
+  names?: string[];
+  /** Matched against the repo's url, ignoring scheme, trailing slash and `.git`. */
+  urls?: string[];
 }
 
 const paths = envPaths('snyk-autoimport', { suffix: '' });
@@ -235,4 +254,26 @@ export function setSourceUrl(source: string, url: string): void {
 
 export function storedSourceUrl(source: string): string | undefined {
   return loadConfig().defaults?.sourceUrls?.[source];
+}
+
+/**
+ * The standing exclude rules, normalised.
+ *
+ * Tolerant of what is actually in the file: a plain array means `names`, a
+ * missing key means none, and a non-string entry is dropped rather than turned
+ * into a pattern that matches nothing in particular. A hand-edited config is
+ * the normal case for this setting, so it has to survive being hand-edited
+ * imperfectly — and failing an import over a stray entry would be worse than
+ * ignoring it.
+ */
+export function storedExcludeRules(config = loadConfig()): Required<ExcludeRules> {
+  const raw = config.defaults?.exclude;
+  const clean = (values: unknown): string[] =>
+    Array.isArray(values)
+      ? values.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+          .map((v) => v.trim())
+      : [];
+
+  if (Array.isArray(raw)) return { names: clean(raw), urls: [] };
+  return { names: clean(raw?.names), urls: clean(raw?.urls) };
 }

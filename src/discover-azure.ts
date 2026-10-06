@@ -49,6 +49,7 @@ export async function discoverAzureTargets(
   return toDiscovery(repos, (repo) => ({
     orgId: opts.orgId,
     integrationId: opts.integrationId,
+    url: repo.url,
     target: {
       owner: repo.owner,
       name: repo.name,

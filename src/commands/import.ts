@@ -18,6 +18,7 @@ import { describeDiscovery } from '../discovery';
 import type { Discovery } from '../discovery';
 import { prepareEnv } from '../env';
 import { applyTargetFilters } from '../filters';
+import { configFilePath, storedExcludeRules } from '../config';
 import { mergeOutcomes, runImport } from '../importer';
 import { confirm, isInteractive } from '../prompt';
 import type { Region } from '../regions';
@@ -133,16 +134,19 @@ export function describeNothingToImport(
   if (alreadyImported > 0 && discovery.excluded.length > 0) {
     return (
       `Nothing to import: ${alreadyImported} repo(s) are already in Snyk and ` +
-      `${discovery.excluded.length} were excluded by --exclude.`
+      `${discovery.excluded.length} were excluded.`
     );
   }
   if (alreadyImported > 0) {
     return 'Nothing to import. All discovered repos are already in Snyk.';
   }
   if (discovery.excluded.length > 0) {
+    // Deliberately does not name --exclude: the rule that matched may have
+    // come from the config file instead, and pointing at the wrong one is how
+    // someone ends up editing a flag that was never the cause.
     return (
-      `Nothing to import: --exclude matched all ${discovery.excluded.length} ` +
-      'discovered repo(s). Loosen the pattern to import any of them.'
+      `Nothing to import: all ${discovery.excluded.length} discovered repo(s) were ` +
+      'excluded. Loosen --exclude, or the exclude rules in the config file.'
     );
   }
   if (discovery.archived > 0) {
@@ -236,17 +240,30 @@ export async function importCmd(args: ImportArgs): Promise<void> {
     sourceUrl,
   );
   // --exclude and --branch are applied here, to every source's discovery at
-  // once, rather than inside each discover*.ts — see filters.ts.
+  // once, rather than inside each discover*.ts — see filters.ts. Rules stored
+  // in the config file are ADDED to the flag rather than replaced by it: a
+  // standing "never import this" is a policy, and a one-off flag on one run
+  // should not quietly switch it off.
+  const standing = storedExcludeRules();
   const discovery = applyTargetFilters(discovered, {
     branch: args.branch,
-    exclude: args.exclude,
+    exclude: [...standing.names, ...(args.exclude ?? [])],
+    excludeUrls: standing.urls,
   });
   const candidates = discovery.targets;
   console.log(`✓ ${describeDiscovery(discovery)}`);
   if (discovery.excluded.length > 0) {
     // Listed, not just counted: a glob that matched more than intended is
     // invisible in a count, and this is the moment to catch it.
-    console.log(`  Excluded by --exclude: ${listExcluded(discovery.excluded)}`);
+    console.log(`  Excluded: ${listExcluded(discovery.excluded)}`);
+  }
+  // Said once, when it applies: a rule in a file nobody opened this week is
+  // exactly the kind of thing that makes a missing repo baffling later.
+  const storedCount = standing.names.length + standing.urls.length;
+  if (storedCount > 0) {
+    console.log(
+      `  ${storedCount} standing exclude rule(s) applied from ${configFilePath()}`,
+    );
   }
   if (args.branch) {
     console.log(`  Importing branch "${args.branch}" rather than each default branch.`);

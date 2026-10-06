@@ -39,6 +39,13 @@ export interface ImportTarget {
   files?: FilePath[];
   /** Comma-separated folder names to skip (max 10). Empty string = skip none. */
   exclusionGlobs?: string;
+  /**
+   * The repo's web address, for `--exclude` rules written as urls and for
+   * reporting. NOT part of the import request: `importTarget` destructures the
+   * fields it sends, so this never reaches Snyk — keep it that way, since the
+   * API rejects a target carrying keys it does not know.
+   */
+  url?: string;
 }
 
 /** One project Snyk created — or failed to create — from a target. */

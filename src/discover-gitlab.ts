@@ -28,6 +28,7 @@ export async function discoverGitlabTargets(
   return toDiscovery(repos, (repo) => ({
     orgId: opts.orgId,
     integrationId: opts.integrationId,
+    url: repo.url,
     target: {
       id: repo.id,
       name: repo.name,

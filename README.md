@@ -24,6 +24,7 @@ through the Node runtime's built-in `fetch`.
 - [Installation](#installation)
 - [Commands](#commands)
 - [Example](#example)
+- [Standing exclude rules](#standing-exclude-rules)
 - [Credentials and configuration](#credentials-and-configuration)
 - [Continuous integration](#continuous-integration)
 
@@ -94,7 +95,7 @@ snyk-autoimport` to remove). Examples below use `snyk-autoimport`; substitute
 | `--source-org` | The organization, group, workspace or project to import from, depending on the provider. Matched without regard to case. For GitLab this includes subgroups, so a group with `acme/team-a` and `acme/team-b` is fully covered by `--source-org acme`. `--github-org` is an accepted alias. |
 | `--source-url` | Host for self-hosted providers (GitHub Enterprise, Bitbucket Server, self-managed GitLab). Only needed if `auth login` has not stored it, or to override the stored one for a single run. |
 | `--branch` | Import this branch instead of each repository's default. Not available for `bitbucket-server`, whose import target has no branch field. |
-| `--exclude` | Repositories to leave alone, as glob patterns where `*` matches anything. A pattern without `/` matches the repository name, one with `/` the full `owner/repo` path. Repeatable, or comma-separated. |
+| `--exclude` | Repositories to leave alone, as glob patterns where `*` matches anything. A pattern without `/` matches the repository name, one with `/` the full `owner/repo` path. Repeatable, or comma-separated. Adds to any [standing rules](#standing-exclude-rules) in the config file rather than replacing them. |
 | `--region` | Overrides the stored region. |
 | `--dry-run` | Show what would be imported and exit, changing nothing. |
 | `--yes` | Skip the confirmation prompt. Required for non-interactive use. |
@@ -196,6 +197,48 @@ Both counts are reported because they answer different questions: repositories
 are what you asked to import, while projects are what Snyk created — one per
 manifest it found. A repository with no supported manifests imports
 successfully and produces none, which the summary calls out separately.
+
+### Standing exclude rules
+
+For repositories that should **never** be imported, put the rules in
+`.snyk-autoimport.json` instead of retyping `--exclude` on every run. They
+apply to every import, by anyone, from any machine using that config:
+
+```json
+{
+  "defaults": {
+    "exclude": {
+      "names": ["test-*", "*-fixtures", "acme/legacy-api"],
+      "urls": ["https://github.com/acme/secret-repo", "https://gitlab.com/acme/internal/*"]
+    }
+  }
+}
+```
+
+`names` match the repository name, or the full `owner/repo` path when the
+pattern contains a `/` — the same rules as `--exclude`. `urls` match the
+repository's web address, ignoring scheme, `www.`, a trailing slash and a
+trailing `.git`, so any form you happen to have works:
+`https://github.com/acme/web`, `github.com/acme/web` and
+`https://github.com/acme/web.git` all exclude the same repository. Both lists
+accept `*`.
+
+A plain array is shorthand for `names`:
+
+```json
+{ "defaults": { "exclude": ["test-*", "*-fixtures"] } }
+```
+
+Two things worth knowing. `--exclude` **adds to** these rather than replacing
+them, so a one-off flag cannot quietly switch off a standing policy. And every
+run says how many standing rules it applied, and names each repository they
+excluded — a rule in a file nobody has opened this week is otherwise exactly
+what makes a missing repository baffling later.
+
+> [!NOTE]
+> A `urls` rule can only match a repository whose provider reported an address.
+> All five do, but the Bitbucket Server path is the one not verified against a
+> real server — if a rule there does not take effect, use `names` instead.
 
 ## Credentials and configuration
 

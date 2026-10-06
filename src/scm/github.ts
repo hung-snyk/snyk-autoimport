@@ -19,6 +19,7 @@ interface GithubApiRepo {
   default_branch: string;
   archived: boolean;
   fork: boolean;
+  html_url?: string;
 }
 
 /**
@@ -69,6 +70,7 @@ export async function listGithubRepos(
         branch: repo.default_branch,
         fork: repo.fork,
         archived: repo.archived,
+        url: repo.html_url,
       });
     }
 

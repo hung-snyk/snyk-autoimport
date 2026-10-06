@@ -5,6 +5,11 @@
  * differ because Snyk's import targets differ (Bitbucket Server has no branch,
  * GitLab needs a numeric id), and collapsing them would hide that.
  *
+ * `url` is the repo's web address as the provider reports it — the thing a
+ * customer sees in the browser and can paste into an exclude rule. It is
+ * carried for filtering and reporting only and is never sent to Snyk; the
+ * import target is the shape above it, and nothing else.
+ *
  * `archived` and `fork` are reported, not acted on. Whether to import such a
  * repo is a policy question, and the answer lives in one place (discovery.ts)
  * rather than being re-decided per provider, where it drifted: three providers
@@ -13,6 +18,8 @@
 
 /** GitHub.com, GitHub Enterprise, and the GitHub Cloud App all use this. */
 export interface GithubRepoData {
+  /** Web address, as the provider reports it. Never sent to Snyk. */
+  url?: string;
   name: string;
   owner: string;
   branch: string;
@@ -21,6 +28,8 @@ export interface GithubRepoData {
 }
 
 export interface GitlabRepoData {
+  /** Web address, as the provider reports it. Never sent to Snyk. */
+  url?: string;
   /** Numeric project id — the only identifier GitLab's import accepts. */
   id: number;
   /** "group/repo" path, carried for dedup (Snyk never returns the id). */
@@ -31,6 +40,8 @@ export interface GitlabRepoData {
 }
 
 export interface AzureRepoData {
+  /** Web address, as the provider reports it. Never sent to Snyk. */
+  url?: string;
   name: string;
   /** The Azure DevOps *project* name, which Snyk treats as the owner. */
   owner: string;
@@ -40,6 +51,8 @@ export interface AzureRepoData {
 }
 
 export interface BitbucketServerRepoData {
+  /** Web address, as the provider reports it. Never sent to Snyk. */
+  url?: string;
   projectKey: string;
   repoSlug: string;
   /** Bitbucket Data Center 8.0+ can archive a repo; older servers omit the field. */
@@ -47,6 +60,8 @@ export interface BitbucketServerRepoData {
 }
 
 export interface BitbucketCloudRepoData {
+  /** Web address, as the provider reports it. Never sent to Snyk. */
+  url?: string;
   name: string;
   owner: string;
   /** Undefined when Bitbucket reports no main branch; Snyk then picks it. */

@@ -26,6 +26,8 @@ interface AzureRepo {
   project: { name: string } | null;
   defaultBranch: string | null;
   isDisabled: boolean;
+  webUrl?: string;
+  remoteUrl?: string;
 }
 
 export function azureBaseUrl(host?: string): string {
@@ -92,6 +94,9 @@ export async function listAzureRepos(
         owner: repo.project.name,
         branch: repo.defaultBranch,
         archived: repo.isDisabled,
+        // webUrl is the browsable address; remoteUrl is the clone address, and
+        // is the one a customer is more likely to have to hand.
+        url: repo.webUrl ?? repo.remoteUrl,
       });
     }
   }

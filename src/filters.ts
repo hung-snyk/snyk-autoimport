@@ -26,6 +26,22 @@
  * Everything else is literal, so a repo named `my.repo` needs no escaping and
  * cannot accidentally match `my-repo`.
  *
+ * WHAT A URL RULE MATCHES
+ *
+ * The repo's web address, as the provider reported it — normalised first, so
+ * the rule matches whatever form the customer happens to have. Scheme,
+ * `www.`, a trailing slash and a trailing `.git` are all removed from both
+ * sides before comparing, and the comparison ignores case. All of these
+ * therefore exclude the same repo:
+ *
+ *   https://github.com/acme/web
+ *   github.com/acme/web
+ *   https://github.com/acme/web.git
+ *   https://github.com/acme/*
+ *
+ * This matters because the address a person has to hand is whatever their
+ * browser or their `git remote -v` showed them, and those differ.
+ *
  * WHAT `--branch` DOES NOT DO
  *
  * It does not check that the branch exists. Verifying would cost one SCM call
@@ -41,6 +57,8 @@ export interface TargetFilters {
   branch?: string;
   /** Glob patterns; a repo matching any one of them is not imported. */
   exclude?: readonly string[];
+  /** Glob patterns matched against the repo's url rather than its name. */
+  excludeUrls?: readonly string[];
 }
 
 /**
@@ -92,6 +110,23 @@ export function matchStrings(target: TargetLike): { path: string; name: string }
   return { path, name: slash === -1 ? path : path.slice(slash + 1) };
 }
 
+/**
+ * Reduce a url to the part worth comparing.
+ *
+ * Applied to both the rule and the repo's address, so neither side has to be
+ * written in a particular form. A value that is not a url at all is returned
+ * trimmed and lowercased, which is harmless: it simply will not match one.
+ */
+export function normalizeUrlForMatch(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\.git$/, '')
+    .replace(/\/+$/, '');
+}
+
 /** Does this target match any exclude pattern? */
 export function isExcluded(
   target: TargetLike,
@@ -101,6 +136,24 @@ export function isExcluded(
   const { path, name } = matchStrings(target);
   return patterns.some((pattern) =>
     globToRegExp(pattern).test(pattern.includes('/') ? path : name),
+  );
+}
+
+/**
+ * Does this repo's url match any url rule?
+ *
+ * A target with no url never matches — Bitbucket Server and any provider that
+ * omitted the field simply cannot be excluded this way, and silently matching
+ * them would be worse than not matching at all.
+ */
+export function isExcludedByUrl(
+  url: string | undefined,
+  patterns: readonly string[],
+): boolean {
+  if (!url || patterns.length === 0) return false;
+  const candidate = normalizeUrlForMatch(url);
+  return patterns.some((pattern) =>
+    globToRegExp(normalizeUrlForMatch(pattern)).test(candidate),
   );
 }
 
@@ -117,11 +170,15 @@ export function applyTargetFilters(
   filters: TargetFilters,
 ): Discovery {
   const patterns = filters.exclude ?? [];
+  const urlPatterns = filters.excludeUrls ?? [];
   const excluded: string[] = [];
   const kept: ImportTarget[] = [];
 
   for (const target of discovery.targets) {
-    if (isExcluded(target.target, patterns)) {
+    if (
+      isExcluded(target.target, patterns) ||
+      isExcludedByUrl(target.url, urlPatterns)
+    ) {
       excluded.push(matchStrings(target.target).path);
       continue;
     }

@@ -26,6 +26,7 @@ export async function discoverBitbucketServerTargets(
   return toDiscovery(repos, (repo) => ({
     orgId: opts.orgId,
     integrationId: opts.integrationId,
+    url: repo.url,
     target: {
       projectKey: repo.projectKey,
       repoSlug: repo.repoSlug,

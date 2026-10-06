@@ -21,6 +21,7 @@ interface BitbucketCloudApiRepo {
   name: string;
   workspace?: { slug?: string; uuid?: string };
   mainbranch?: { name?: string } | null;
+  links?: { html?: { href?: string } };
 }
 
 interface BitbucketCloudPage {
@@ -142,6 +143,7 @@ export async function listBitbucketCloudRepos(
         // the repo's real default. snyk-api-import hardcoded "main" here,
         // which fails the import outright on a repo whose default is "master".
         branch: repo.mainbranch?.name,
+        url: repo.links?.html?.href,
       });
     }
 

@@ -41,6 +41,7 @@ interface GitlabApiProject {
   archived: boolean;
   namespace: { full_path: string };
   forked_from_project?: unknown;
+  web_url?: string;
 }
 
 export function gitlabBaseUrl(host?: string): string {
@@ -118,6 +119,7 @@ async function collectProjects(
         branch: project.default_branch,
         fork: Boolean(project.forked_from_project),
         archived: project.archived,
+        url: project.web_url,
       });
     }
 
